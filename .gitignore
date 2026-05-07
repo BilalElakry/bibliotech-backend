@@ -1,0 +1,32 @@
+# Maven
+target/
+!.mvn/wrapper/maven-wrapper.jar
+!**/src/main/**/target/
+!**/src/test/**/target/
+
+# IntelliJ IDEA
+.idea/
+*.iws
+*.iml
+*.ipr
+out/
+.idea/modules.xml
+.idea/workspace.xml
+
+# PDF uploads — never commit user files
+uploads/
+
+# Application config with secrets
+# Uncomment if you store real keys in yml
+src/main/resources/application.yml
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Environment
+.env

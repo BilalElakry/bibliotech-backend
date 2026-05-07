@@ -1,0 +1,42 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: bibliotech
+
+  datasource:
+    url: jdbc:mysql://localhost:3306/bibliotech_db?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true
+    username: root
+    password:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.MySQLDialect
+
+  servlet:
+    multipart:
+      enabled: true
+      max-file-size: 50MB
+      max-request-size: 55MB
+
+  ai:
+    ollama:
+      base-url: http://localhost:11434
+      chat:
+        options:
+          model: tinyllama
+          temperature: 0.7
+
+bibliotech:
+  jwt:
+    secret: bibliotech-jwt-secret-key-2026-bilal-haitam-emsi-rabat
+    expiration: 86400000
+
+  storage:
+    upload-dir: ./uploads
