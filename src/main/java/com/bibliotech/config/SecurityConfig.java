@@ -1,6 +1,7 @@
 package com.bibliotech.config;
 
 import com.bibliotech.security.JwtAuthenticationFilter;
+import com.bibliotech.security.RateLimitFilter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -29,6 +30,7 @@ import java.util.List;
 public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtFilter;
+    private final RateLimitFilter rateLimitFilter;
     private final UserDetailsService userDetailsService;
 
     @Bean
@@ -40,32 +42,33 @@ public class SecurityConfig {
                         s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(a -> a
                         .requestMatchers("/api/auth/**").permitAll()
-
-                        // Documents
-                        .requestMatchers(HttpMethod.GET, "/api/documents/**").authenticated()
-                        .requestMatchers(HttpMethod.POST, "/api/documents/**").hasRole("ADMIN")
-                        .requestMatchers(HttpMethod.PUT,  "/api/documents/**").hasRole("ADMIN")
-                        .requestMatchers(HttpMethod.DELETE, "/api/documents/**").hasRole("ADMIN")
-
-                        // Categories
+                        .requestMatchers("/swagger-ui/**",
+                                "/v3/api-docs/**").permitAll()
+                        .requestMatchers(HttpMethod.GET,
+                                "/api/documents/**").authenticated()
+                        .requestMatchers(HttpMethod.POST,
+                                "/api/documents/**").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.PUT,
+                                "/api/documents/**").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.DELETE,
+                                "/api/documents/**").hasRole("ADMIN")
                         .requestMatchers("/api/categories/**").hasRole("ADMIN")
-
-                        // Utilisateurs — /me is for everyone, rest is ADMIN only
-                        .requestMatchers(HttpMethod.GET,  "/api/utilisateurs/me").authenticated()
-                        .requestMatchers(HttpMethod.PUT,  "/api/utilisateurs/me/password").authenticated()
+                        .requestMatchers(HttpMethod.GET,
+                                "/api/utilisateurs/me").authenticated()
+                        .requestMatchers(HttpMethod.PUT,
+                                "/api/utilisateurs/me/password").authenticated()
                         .requestMatchers("/api/utilisateurs/**").hasRole("ADMIN")
-
-                        // Stats
                         .requestMatchers("/api/stats/**").hasRole("ADMIN")
-
-                        // Acces and Chatbot
+                        .requestMatchers("/api/audit/**").hasRole("ADMIN")
                         .requestMatchers("/api/acces/**").authenticated()
                         .requestMatchers("/api/chatbot/**").authenticated()
-
                         .anyRequest().authenticated()
                 )
                 .authenticationProvider(authProvider())
-                .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class)
+                .addFilterBefore(rateLimitFilter,
+                        UsernamePasswordAuthenticationFilter.class)
+                .addFilterBefore(jwtFilter,
+                        UsernamePasswordAuthenticationFilter.class)
                 .build();
     }
 
@@ -78,7 +81,8 @@ public class SecurityConfig {
     }
 
     @Bean
-    public AuthenticationManager authManager(AuthenticationConfiguration c) throws Exception {
+    public AuthenticationManager authManager(
+            AuthenticationConfiguration c) throws Exception {
         return c.getAuthenticationManager();
     }
 
@@ -91,7 +95,8 @@ public class SecurityConfig {
     public CorsConfigurationSource corsSource() {
         var config = new CorsConfiguration();
         config.setAllowedOrigins(List.of("http://localhost:3000"));
-        config.setAllowedMethods(List.of("GET","POST","PUT","DELETE","OPTIONS"));
+        config.setAllowedMethods(
+                List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         config.setAllowedHeaders(List.of("*"));
         config.setAllowCredentials(true);
         var source = new UrlBasedCorsConfigurationSource();

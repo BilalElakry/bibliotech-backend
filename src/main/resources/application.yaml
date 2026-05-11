@@ -32,11 +32,29 @@ spring:
         options:
           model: tinyllama
           temperature: 0.7
+  mail:
+    host: smtp.gmail.com
+    port: 587
+    username: bibliotech.notifications@gmail.com
+    password: ssjh lwon xmyg qqfe
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+          connectiontimeout: 5000
+          timeout: 5000
+          writetimeout: 5000
 
 bibliotech:
   jwt:
     secret: bibliotech-jwt-secret-key-2026-bilal-haitam-emsi-rabat
     expiration: 86400000
+  mail:
+    enabled: false
+    from: bibliotech.notifications@gmail.com
+    app-name: BiblioTech
 
   storage:
     upload-dir: ./uploads

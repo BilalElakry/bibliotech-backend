@@ -1,19 +1,14 @@
 package com.bibliotech.chatbot;
 
+import com.bibliotech.catalogue.document.DocumentService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.ChatClient;
-import org.springframework.ai.chat.messages.AssistantMessage;
-import org.springframework.ai.chat.messages.Message;
-import org.springframework.ai.chat.messages.SystemMessage;
-import org.springframework.ai.chat.messages.UserMessage;
+import org.springframework.ai.chat.messages.*;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.stereotype.Service;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
 @Slf4j
@@ -22,51 +17,67 @@ import java.util.concurrent.ConcurrentHashMap;
 public class ChatbotService {
 
     private final ChatClient chatClient;
+    private final DocumentService documentService;
 
-    // In-memory session store
-    private final Map<String, List<Message>> sessions = new ConcurrentHashMap<>();
+    private final Map<String, List<Message>> sessions =
+            new ConcurrentHashMap<>();
 
     private static final String SYSTEM_PROMPT = """
-            Tu es un assistant de bibliothèque numérique intelligent et serviable.
-            Tu aides les utilisateurs à :
-            - Trouver des documents dans la bibliothèque par titre, auteur ou thématique
-            - Répondre aux questions sur les politiques de la bibliothèque
-            - Proposer des recommandations de lecture
-            Réponds toujours en français, de façon concise et précise.
-            Si tu ne sais pas, dis-le honnêtement.
+            Tu es un assistant de bibliothèque numérique.
+            Voici les documents disponibles dans notre catalogue :
+
+            %s
+
+            Réponds uniquement en te basant sur ces documents.
+            Si le document demandé n'est pas dans le catalogue,
+            dis-le clairement.
+            Réponds toujours en français, de façon concise.
             """;
 
     public ChatResponse chat(String userMessage, String sessionId) {
         String sid = (sessionId != null && !sessionId.isBlank())
                 ? sessionId : UUID.randomUUID().toString();
 
-        List<Message> history = sessions.computeIfAbsent(sid, k -> new ArrayList<>());
+        String catalogueContext = buildCatalogueContext();
+        List<Message> history =
+                sessions.computeIfAbsent(sid, k -> new ArrayList<>());
 
-        // Build messages
         List<Message> messages = new ArrayList<>();
-        messages.add(new SystemMessage(SYSTEM_PROMPT));
+        messages.add(new SystemMessage(
+                String.format(SYSTEM_PROMPT, catalogueContext)));
         messages.addAll(history);
         messages.add(new UserMessage(userMessage));
 
-        // Call Ollama
         String reply = chatClient.call(new Prompt(messages))
-                .getResult()
-                .getOutput()
-                .getContent();
+                .getResult().getOutput().getContent();
 
-        // Save to history
         history.add(new UserMessage(userMessage));
         history.add(new AssistantMessage(reply));
 
-        // Keep last 20 messages only
-        if (history.size() > 20) {
+        if (history.size() > 20)
             history.subList(0, history.size() - 20).clear();
-        }
 
         log.info("Chatbot [{}] — '{}'", sid,
-                userMessage.substring(0, Math.min(50, userMessage.length())));
+                userMessage.substring(0,
+                        Math.min(50, userMessage.length())));
 
         return new ChatResponse(reply, sid);
+    }
+
+    private String buildCatalogueContext() {
+        var documents = documentService.findAllForRag();
+        if (documents.isEmpty()) return "Aucun document disponible.";
+
+        StringBuilder sb = new StringBuilder();
+        for (var d : documents) {
+            sb.append(String.format(
+                    "- \"%s\" de %s (%d) — Catégorie: %s — ISBN: %s\n",
+                    d.getTitre(), d.getAuteur(), d.getAnneePublication(),
+                    d.getCategorie() != null
+                            ? d.getCategorie().getNom() : "N/A",
+                    d.getIsbn()));
+        }
+        return sb.toString();
     }
 
     public void clearSession(String sessionId) {
