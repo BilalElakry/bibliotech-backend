@@ -163,10 +163,10 @@ Exécuter dans phpMyAdmin ou MySQL :
 ```sql
 INSERT INTO utilisateurs (nom, prenom, email, mot_de_passe_hash, role, actif, date_inscription)
 VALUES (
-    'Admin', 'BiblioTech', 'admin@bibliotech.com',
-    '$2a$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi',
-    'ADMIN', true, CURDATE()
-);
+           'Admin', 'BiblioTech', 'admin@bibliotech.com',
+           '$2a$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi',
+           'ADMIN', true, CURDATE()
+       );
 ```
 > Mot de passe : **`password`**
 
