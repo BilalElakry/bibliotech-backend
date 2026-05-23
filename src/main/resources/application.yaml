@@ -55,6 +55,9 @@ bibliotech:
     enabled: false
     from: bibliotech.notifications@gmail.com
     app-name: BiblioTech
-
   storage:
     upload-dir: ./uploads
+  tts:
+    max-chars: 3000
+    max-pages: 10
+    engine: espeak  # ou "marytts"

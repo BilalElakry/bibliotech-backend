@@ -62,6 +62,8 @@ public class SecurityConfig {
                         .requestMatchers("/api/audit/**").hasRole("ADMIN")
                         .requestMatchers("/api/acces/**").authenticated()
                         .requestMatchers("/api/chatbot/**").authenticated()
+                        .requestMatchers("/api/tts/**").authenticated()
+                        .requestMatchers("/api/openlibrary/**").hasRole("ADMIN")
                         .anyRequest().authenticated()
                 )
                 .authenticationProvider(authProvider())
