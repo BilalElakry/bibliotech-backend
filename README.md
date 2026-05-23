@@ -9,7 +9,8 @@
 
 > Plateforme web complète de gestion de bibliothèque numérique permettant la centralisation,
 > la gestion et la diffusion sécurisée de ressources documentaires au format PDF,
-> enrichie d'un assistant conversationnel intelligent basé sur Spring AI.
+> enrichie d'un assistant conversationnel intelligent basé sur Spring AI et d'un module
+> Text-to-Speech (TTS) pour la lecture audio des documents.
 
 ---
 
@@ -17,7 +18,7 @@
 
 | Membre | Rôle |
 |--------|------|
-| **Bilal Elakry** | Back-end, Sécurité JWT, StorageService, Chatbot Spring AI |
+| **Bilal Elakry** | Back-end, Sécurité JWT, StorageService, Chatbot Spring AI, TTS, Audit, Stats, OpenLibrary |
 | **Haitam Khouna** | Diagrammes UML, Module Documents, Interface React.js |
 
 **Encadrante :** Mme Aarich Mounia  
@@ -29,35 +30,50 @@
 ## 🎯 Fonctionnalités
 
 ### 👤 Gestion des utilisateurs
-- Inscription publique (`/api/auth/register`)
-- Authentification sécurisée par JWT
+- Inscription publique (`/api/auth/register`) avec email de bienvenue automatique
+- Authentification sécurisée par JWT (expiration 24h)
 - Deux rôles : `ADMIN` et `UTILISATEUR`
-- Gestion du profil et changement de mot de passe
-- Activation / désactivation des comptes (Admin)
+- Gestion du profil et changement de mot de passe (avec notification email)
+- Activation / désactivation des comptes par l'admin (avec notification email)
 
 ### 📄 Catalogue documentaire
 - Ajout, modification, suppression de documents PDF
-- Recherche par titre, auteur, catégorie ou ISBN
+- Recherche simple (titre, auteur, ISBN) et recherche avancée (filtres par catégorie, année min/max)
+- Pagination et tri configurables
 - Gestion des catégories thématiques
 - Upload sécurisé de fichiers PDF (max 50 Mo)
+- Intégration **OpenLibrary API** pour pré-remplir les métadonnées par ISBN ou mot-clé
 
 ### 📥 Accès et téléchargement
 - Téléchargement sécurisé de PDF (endpoint REST protégé par JWT)
 - Lecture en ligne via visionneuse intégrée
-- Traçabilité complète des accès (téléchargements + lectures)
+- Traçabilité complète des accès (téléchargements + lectures en ligne)
 - Compteur de téléchargements par document
+- Email de confirmation automatique à chaque téléchargement
 
 ### 🤖 Chatbot Spring AI
-- Assistant conversationnel en langage naturel
-- Recherche documentaire intelligente
-- FAQ interactive
-- Mémoire conversationnelle par session (`ChatMemory`)
-- Propulsé par Ollama + TinyLlama (100% local, gratuit)
+- Assistant conversationnel en langage naturel (français)
+- Contexte dynamique basé sur le catalogue réel au moment de la requête
+- Mémoire conversationnelle par session (fenêtre glissante de 20 messages)
+- Propulsé par **Ollama + TinyLlama** (100% local, gratuit, sans clé API)
 
-### 📊 Statistiques
-- Tableau de bord administrateur
-- Documents les plus téléchargés
-- Historique d'accès par utilisateur
+### 🔊 Text-to-Speech (TTS)
+- Extraction de texte depuis les PDFs via **Apache PDFBox**
+- Génération audio WAV via **espeak-ng** (voix française ou anglaise)
+- Endpoint de récupération du texte brut pour la Web Speech API du navigateur
+- Limité aux 10 premières pages et 3 000 caractères pour les performances
+
+### 📊 Statistiques & Audit
+- Tableau de bord administrateur : total documents, utilisateurs, téléchargements, lectures
+- Top 5 des documents les plus téléchargés
+- 10 accès les plus récents
+- Export CSV des historiques d'accès
+- Journal d'audit complet (actions LOGIN, UPLOAD, DELETE, DOWNLOAD, etc.) avec niveaux INFO / WARNING / ERROR
+- Journalisation asynchrone (`@Async`) pour ne pas bloquer les requêtes
+
+### 🔒 Rate Limiting
+- Limitation à **60 requêtes par minute** par adresse IP (Bucket4j)
+- Réponse HTTP 429 avec message explicite en cas de dépassement
 
 ---
 
@@ -67,8 +83,14 @@
 |--------|-------------|
 | **Back-end** | Java 17, Spring Boot 3.2.5 |
 | **Sécurité** | Spring Security, JWT (jjwt 0.12.5), BCrypt |
+| **Rate Limiting** | Bucket4j 8.10.1 |
 | **Persistance** | Spring Data JPA, Hibernate, MySQL 8 / MariaDB |
 | **IA conversationnelle** | Spring AI 0.8.1, Ollama, TinyLlama |
+| **Extraction PDF** | Apache PDFBox 3.0.2 |
+| **Text-to-Speech** | espeak-ng (local), Web Speech API |
+| **Métadonnées livres** | OpenLibrary REST API |
+| **Notifications email** | Spring Boot Mail (SMTP Gmail) |
+| **Documentation API** | SpringDoc OpenAPI / Swagger UI 2.3.0 |
 | **Stockage PDF** | Système de fichiers local (StorageService) |
 | **Front-end** | React.js 18 (à venir) |
 | **Tests** | Postman, Spring Boot Test |
@@ -83,20 +105,27 @@ bibliotech/
 ├── src/
 │   ├── main/
 │   │   ├── java/com/bibliotech/
-│   │   │   ├── auth/               # Authentification JWT
+│   │   │   ├── auth/               # Authentification JWT (login, register, logout)
 │   │   │   ├── catalogue/
-│   │   │   │   ├── document/       # Gestion des documents PDF
-│   │   │   │   └── categorie/      # Gestion des catégories
-│   │   │   ├── acces/              # Téléchargements et accès PDF
-│   │   │   ├── utilisateur/        # Gestion des utilisateurs
-│   │   │   ├── chatbot/            # Assistant Spring AI
-│   │   │   ├── storage/            # Stockage fichiers PDF
-│   │   │   ├── security/           # JWT Filter, UserDetailsService
-│   │   │   ├── config/             # SecurityConfig
-│   │   │   └── exception/          # GlobalExceptionHandler
+│   │   │   │   ├── document/       # Gestion des documents PDF (CRUD + upload + recherche)
+│   │   │   │   └── categorie/      # Gestion des catégories thématiques
+│   │   │   ├── acces/              # Traçabilité des téléchargements et lectures en ligne
+│   │   │   ├── utilisateur/        # Gestion des comptes utilisateurs
+│   │   │   ├── chatbot/            # Assistant Spring AI (Ollama/TinyLlama)
+│   │   │   ├── stats/              # Statistiques admin + export CSV
+│   │   │   ├── audit/              # Journal d'audit asynchrone
+│   │   │   ├── notification/       # Service email (SMTP) + EmailProperties
+│   │   │   ├── openlibrary/        # Intégration OpenLibrary API (ISBN lookup + search)
+│   │   │   ├── tts/                # Text-to-Speech (PDFBox + espeak-ng)
+│   │   │   ├── storage/            # Stockage fichiers PDF (StorageService + StorageProperties)
+│   │   │   ├── security/           # JwtAuthenticationFilter, JwtUtils, RateLimitFilter, UserDetailsServiceImpl
+│   │   │   ├── config/             # SecurityConfig, RestTemplateConfig
+│   │   │   └── exception/          # GlobalExceptionHandler, BusinessException, ResourceNotFoundException
 │   │   └── resources/
-│   │       └── application.yml
+│   │       └── application.yaml
 │   └── test/
+│       └── java/com/bibliotech/
+│           └── BibliotechApplicationTests.java
 ├── uploads/                        # Fichiers PDF stockés (gitignore)
 ├── pom.xml
 └── README.md
@@ -110,6 +139,7 @@ bibliotech/
 - **Maven 3.8+** — [Download](https://maven.apache.org/download.cgi)
 - **MySQL / MariaDB** — via XAMPP ou installation standalone
 - **Ollama** — [Download](https://ollama.com)
+- **espeak-ng** *(optionnel, pour TTS audio)* — [Download](https://github.com/espeak-ng/espeak-ng/releases)
 - **Git** — [Download](https://git-scm.com)
 
 ---
@@ -134,18 +164,21 @@ ollama pull tinyllama
 # Ollama démarre automatiquement sur http://localhost:11434
 ```
 
-### 4. Configurer `application.yml`
+### 4. Configurer `application.yaml`
 
 ```yaml
 spring:
   datasource:
     username: root
-    password:           # votre mot de passe MySQL
-  ai:
-    ollama:
-      chat:
-        options:
-          model: tinyllama
+    password:           # votre mot de passe MySQL (vide pour XAMPP par défaut)
+  mail:
+    username: votre-email@gmail.com
+    password: votre-app-password   # mot de passe d'application Gmail
+
+bibliotech:
+  mail:
+    enabled: true        # passer à false pour désactiver les emails
+    from: votre-email@gmail.com
 ```
 
 ### 5. Lancer l'application
@@ -154,7 +187,8 @@ spring:
 mvn spring-boot:run
 ```
 
-L'application démarre sur **http://localhost:8080**
+L'application démarre sur **http://localhost:8080**  
+La documentation Swagger est accessible sur **http://localhost:8080/swagger-ui/index.html**
 
 ### 6. Créer le premier administrateur
 
@@ -163,10 +197,10 @@ Exécuter dans phpMyAdmin ou MySQL :
 ```sql
 INSERT INTO utilisateurs (nom, prenom, email, mot_de_passe_hash, role, actif, date_inscription)
 VALUES (
-           'Admin', 'BiblioTech', 'admin@bibliotech.com',
-           '$2a$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi',
-           'ADMIN', true, CURDATE()
-       );
+    'Admin', 'BiblioTech', 'admin@bibliotech.com',
+    '$2a$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi',
+    'ADMIN', true, CURDATE()
+);
 ```
 > Mot de passe : **`password`**
 
@@ -178,67 +212,119 @@ VALUES (
 
 | Méthode | Endpoint | Accès | Description |
 |---------|----------|-------|-------------|
-| `POST` | `/api/auth/login` | Public | Connexion |
-| `POST` | `/api/auth/register` | Public | Inscription |
-| `POST` | `/api/auth/logout` | Authentifié | Déconnexion |
+| `POST` | `/api/auth/login` | Public | Connexion — retourne le JWT |
+| `POST` | `/api/auth/register` | Public | Inscription (rôle UTILISATEUR) |
+| `POST` | `/api/auth/logout` | Authentifié | Déconnexion (stateless, côté client) |
 
 ### 📄 Documents
 
 | Méthode | Endpoint | Accès | Description |
 |---------|----------|-------|-------------|
-| `GET` | `/api/documents` | Authentifié | Liste / recherche |
-| `GET` | `/api/documents/{id}` | Authentifié | Détails |
-| `POST` | `/api/documents` | Admin | Ajouter + upload PDF |
-| `PUT` | `/api/documents/{id}` | Admin | Modifier |
-| `DELETE` | `/api/documents/{id}` | Admin | Supprimer |
-| `GET` | `/api/documents/{id}/pdf` | Authentifié | Télécharger PDF |
-| `GET` | `/api/documents/{id}/pdf/inline` | Authentifié | Lire en ligne |
+| `GET` | `/api/documents` | Authentifié | Liste paginée / recherche (`q`, `categorieId`, `sortBy`, `direction`) |
+| `GET` | `/api/documents/advanced` | Authentifié | Recherche avancée (`q`, `categorieId`, `anneeMin`, `anneeMax`) |
+| `GET` | `/api/documents/{id}` | Authentifié | Détails d'un document |
+| `POST` | `/api/documents` | Admin | Ajouter un document + upload PDF (multipart) |
+| `PUT` | `/api/documents/{id}` | Admin | Modifier un document (+ remplacement PDF optionnel) |
+| `DELETE` | `/api/documents/{id}` | Admin | Supprimer un document (+ suppression du fichier PDF) |
+| `GET` | `/api/documents/{id}/pdf` | Authentifié | Télécharger le PDF (attachment) |
+| `GET` | `/api/documents/{id}/pdf/inline` | Authentifié | Lire le PDF en ligne (inline) |
 
 ### 📁 Catégories
 
 | Méthode | Endpoint | Accès | Description |
 |---------|----------|-------|-------------|
-| `GET` | `/api/categories` | Admin | Liste |
-| `POST` | `/api/categories` | Admin | Créer |
-| `PUT` | `/api/categories/{id}` | Admin | Modifier |
-| `DELETE` | `/api/categories/{id}` | Admin | Supprimer |
+| `GET` | `/api/categories` | Admin | Liste des catégories |
+| `GET` | `/api/categories/{id}` | Admin | Détails d'une catégorie |
+| `POST` | `/api/categories` | Admin | Créer une catégorie |
+| `PUT` | `/api/categories/{id}` | Admin | Modifier une catégorie |
+| `DELETE` | `/api/categories/{id}` | Admin | Supprimer (refus si des documents y sont rattachés) |
 
 ### 👥 Utilisateurs
 
 | Méthode | Endpoint | Accès | Description |
 |---------|----------|-------|-------------|
-| `GET` | `/api/utilisateurs` | Admin | Liste |
-| `POST` | `/api/utilisateurs` | Admin | Créer |
-| `PATCH` | `/api/utilisateurs/{id}/toggle` | Admin | Activer/Désactiver |
-| `DELETE` | `/api/utilisateurs/{id}` | Admin | Supprimer |
+| `GET` | `/api/utilisateurs` | Admin | Liste de tous les utilisateurs |
+| `GET` | `/api/utilisateurs/{id}` | Admin | Détails d'un utilisateur |
+| `POST` | `/api/utilisateurs` | Admin | Créer un compte utilisateur |
+| `PATCH` | `/api/utilisateurs/{id}/toggle` | Admin | Activer / Désactiver un compte |
+| `DELETE` | `/api/utilisateurs/{id}` | Admin | Supprimer un compte |
 | `GET` | `/api/utilisateurs/me` | Authentifié | Mon profil |
-| `PUT` | `/api/utilisateurs/me/password` | Authentifié | Changer mot de passe |
+| `PUT` | `/api/utilisateurs/me/password` | Authentifié | Changer mon mot de passe |
 
-### 📥 Accès PDF
+### 📥 Accès & Historique
 
 | Méthode | Endpoint | Accès | Description |
 |---------|----------|-------|-------------|
-| `GET` | `/api/acces/documents/{id}/telecharger` | Authentifié | Télécharger |
-| `GET` | `/api/acces/documents/{id}/lire` | Authentifié | Lire en ligne |
-| `GET` | `/api/acces/mon-historique` | Authentifié | Mon historique |
-| `GET` | `/api/acces/utilisateurs/{id}` | Admin | Historique d'un user |
+| `GET` | `/api/acces/documents/{id}/telecharger` | Authentifié | Télécharger + enregistrer l'accès |
+| `GET` | `/api/acces/documents/{id}/lire` | Authentifié | Lire en ligne + enregistrer l'accès |
+| `GET` | `/api/acces/mon-historique` | Authentifié | Historique de mes accès |
+| `GET` | `/api/acces/utilisateurs/{userId}` | Admin | Historique d'accès d'un utilisateur |
+
+### 📊 Statistiques
+
+| Méthode | Endpoint | Accès | Description |
+|---------|----------|-------|-------------|
+| `GET` | `/api/stats` | Admin | Tableau de bord complet (totaux + top 5 + accès récents) |
+| `GET` | `/api/stats/export/csv` | Admin | Export CSV de tous les accès |
+
+### 🗂️ Audit
+
+| Méthode | Endpoint | Accès | Description |
+|---------|----------|-------|-------------|
+| `GET` | `/api/audit` | Admin | Journal paginé de toutes les actions |
+| `GET` | `/api/audit/recent` | Admin | 20 actions les plus récentes |
+| `GET` | `/api/audit/errors` | Admin | Actions en erreur uniquement |
+| `GET` | `/api/audit/utilisateurs/{email}` | Admin | Journal paginé par utilisateur |
 
 ### 🤖 Chatbot
 
 | Méthode | Endpoint | Accès | Description |
 |---------|----------|-------|-------------|
-| `POST` | `/api/chatbot/message` | Authentifié | Envoyer un message |
-| `DELETE` | `/api/chatbot/session/{id}` | Authentifié | Effacer la session |
+| `POST` | `/api/chatbot/message` | Authentifié | Envoyer un message (`message`, `sessionId`) |
+| `DELETE` | `/api/chatbot/session/{sessionId}` | Authentifié | Effacer l'historique de session |
+
+### 🔊 Text-to-Speech
+
+| Méthode | Endpoint | Accès | Description |
+|---------|----------|-------|-------------|
+| `GET` | `/api/tts/documents/{id}/audio` | Authentifié | Génère un fichier WAV depuis le PDF (`langue` : `fr`/`en`) |
+| `GET` | `/api/tts/documents/{id}/text` | Authentifié | Texte extrait du PDF pour Web Speech API (`maxChars`) |
+
+### 📖 OpenLibrary
+
+| Méthode | Endpoint | Accès | Description |
+|---------|----------|-------|-------------|
+| `GET` | `/api/openlibrary/isbn/{isbn}` | Admin | Récupérer les métadonnées d'un livre par ISBN |
+| `GET` | `/api/openlibrary/search?q=...&limit=10` | Admin | Rechercher des livres par mot-clé |
 
 ---
 
 ## 🔒 Sécurité
 
 - Mots de passe hachés avec **BCrypt**
-- Authentification sans état via **JWT** (expiration : 24h)
-- Contrôle d'accès par rôle **RBAC** (ADMIN / UTILISATEUR)
+- Authentification sans état via **JWT** (expiration configurable, défaut 24h)
+- Contrôle d'accès par rôle **RBAC** (`ADMIN` / `UTILISATEUR`) via `@PreAuthorize`
+- Filtrage JWT sur chaque requête (`OncePerRequestFilter`)
+- Rate limiting : 60 requêtes/minute/IP (Bucket4j) — HTTP 429 en cas de dépassement
 - Fichiers PDF inaccessibles sans token JWT valide
+- CORS configuré pour `http://localhost:3000`
 - Conformité **Loi 09-08** (protection des données personnelles)
+
+---
+
+## 📧 Notifications email
+
+Les emails suivants sont envoyés de manière **asynchrone** (`@Async`) :
+
+| Événement | Destinataire |
+|-----------|-------------|
+| Création de compte | Nouvel utilisateur (bienvenue) |
+| Téléchargement d'un document | Utilisateur (confirmation) |
+| Activation / désactivation du compte | Utilisateur concerné |
+| Changement de mot de passe | Utilisateur concerné |
+| Ajout d'un nouveau document | Notification admin (optionnel) |
+
+> Les emails peuvent être désactivés globalement via `bibliotech.mail.enabled: false` dans `application.yaml`.
 
 ---
 
@@ -247,37 +333,53 @@ VALUES (
 Importer la collection Postman depuis le dossier `/postman` du projet.
 
 Séquence de test recommandée :
-1. `POST /api/auth/login` → récupérer le token
+1. `POST /api/auth/login` → récupérer le token JWT
 2. `POST /api/categories` → créer une catégorie
-3. `POST /api/documents` → uploader un document PDF
-4. `GET /api/documents` → vérifier le catalogue
-5. `GET /api/acces/documents/1/telecharger` → télécharger le PDF
+3. `POST /api/documents` (multipart) → uploader un document PDF
+4. `GET /api/documents` → vérifier le catalogue paginé
+5. `GET /api/acces/documents/1/telecharger` → télécharger et tracer l'accès
 6. `POST /api/chatbot/message` → tester l'assistant
+7. `GET /api/tts/documents/1/text` → extraire le texte pour TTS
+8. `GET /api/stats` → consulter le tableau de bord
+9. `GET /api/audit` → consulter le journal d'audit
+10. `GET /api/openlibrary/isbn/9782100819775` → lookup ISBN
 
 ---
 
-## 📝 Variables d'environnement
+## 📝 Variables de configuration
 
-| Variable | Valeur par défaut | Description |
-|----------|-------------------|-------------|
+| Propriété | Valeur par défaut | Description |
+|-----------|-------------------|-------------|
 | `spring.datasource.password` | *(vide)* | Mot de passe MySQL |
-| `bibliotech.jwt.secret` | `bibliotech-256-bit-secret...` | Clé secrète JWT |
-| `bibliotech.storage.upload-dir` | `./uploads` | Répertoire PDF |
-| `spring.ai.ollama.chat.options.model` | `tinyllama` | Modèle LLM |
+| `bibliotech.jwt.secret` | `bibliotech-jwt-secret-key-...` | Clé secrète JWT (min. 256 bits) |
+| `bibliotech.jwt.expiration` | `86400000` | Durée du token en ms (24h) |
+| `bibliotech.storage.upload-dir` | `./uploads` | Répertoire de stockage des PDFs |
+| `spring.ai.ollama.chat.options.model` | `tinyllama` | Modèle LLM Ollama |
+| `bibliotech.mail.enabled` | `false` | Activer/désactiver les emails |
+| `bibliotech.mail.from` | — | Adresse expéditeur |
+| `bibliotech.tts.max-chars` | `3000` | Limite de caractères pour le TTS |
+| `bibliotech.tts.max-pages` | `10` | Nombre max de pages extraites |
 
 ---
 
 ## 📌 Roadmap
 
-- [x] Back-end Spring Boot complet
+- [x] Back-end Spring Boot complet (architecture Package by Feature)
 - [x] Authentification JWT + RBAC
 - [x] Gestion catalogue + upload PDF
-- [x] Traçabilité des accès
-- [x] Chatbot Spring AI (Ollama)
-- [ ] Front-end React.js
-- [ ] Tableau de bord statistiques
-- [ ] Export rapports PDF/CSV
-- [ ] Pipeline RAG sur le catalogue
+- [x] Recherche simple et avancée (paginée)
+- [x] Traçabilité complète des accès
+- [x] Chatbot Spring AI (Ollama/TinyLlama)
+- [x] Statistiques admin + export CSV
+- [x] Journal d'audit asynchrone
+- [x] Notifications email (Spring Mail)
+- [x] Rate limiting (Bucket4j)
+- [x] Intégration OpenLibrary API
+- [x] Text-to-Speech (PDFBox + espeak-ng)
+- [x] Documentation Swagger/OpenAPI
+- [ ] Front-end React.js (en cours — Haitam Khouna)
+- [ ] Pipeline RAG sur le contenu des PDFs
+- [ ] Export rapports PDF
 
 ---
 
