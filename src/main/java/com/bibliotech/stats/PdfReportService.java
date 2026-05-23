@@ -293,7 +293,7 @@ public class PdfReportService {
             // Header text
             ColumnText.showTextAligned(cb,
                     Element.ALIGN_LEFT,
-                    new Phrase("BiblioTech — Rapport Statistiques",
+                    new Phrase("ScribeAI — Rapport Statistiques",
                             new Font(Font.HELVETICA, 9,
                                     Font.NORMAL, Color.WHITE)),
                     40, page.getHeight() - 18, 0);
