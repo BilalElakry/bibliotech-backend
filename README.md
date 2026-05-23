@@ -9,8 +9,8 @@
 
 > Plateforme web complète de gestion de bibliothèque numérique permettant la centralisation,
 > la gestion et la diffusion sécurisée de ressources documentaires au format PDF,
-> enrichie d'un assistant conversationnel intelligent basé sur Spring AI et d'un module
-> Text-to-Speech (TTS) pour la lecture audio des documents.
+> enrichie d'un assistant conversationnel intelligent basé sur Spring AI, d'un module
+> Text-to-Speech (TTS) et d'un système de sous-titres synchronisés (CC Sync / WebVTT).
 
 ---
 
@@ -18,7 +18,7 @@
 
 | Membre | Rôle |
 |--------|------|
-| **Bilal Elakry** | Back-end, Sécurité JWT, StorageService, Chatbot Spring AI, TTS, Audit, Stats, OpenLibrary |
+| **Bilal Elakry** | Back-end, Sécurité JWT, StorageService, Chatbot Spring AI, TTS, CC Sync, Audit, Stats, OpenLibrary |
 | **Haitam Khouna** | Diagrammes UML, Module Documents, Interface React.js |
 
 **Encadrante :** Mme Aarich Mounia  
@@ -63,6 +63,15 @@
 - Endpoint de récupération du texte brut pour la Web Speech API du navigateur
 - Limité aux 10 premières pages et 3 000 caractères pour les performances
 
+### 🎬 CC Sync — Sous-titres synchronisés
+- Découpage du texte PDF en segments de 12 mots avec horodatage précis
+- Timestamps calculés en fonction de la vitesse espeak-ng (150 WPM) pour une synchronisation exacte
+- Export **WebVTT** standard, compatible HTML5 `<track>` et tous les lecteurs media
+- Export **JSON** des segments pour intégration React personnalisée
+- Filtre de bruit intelligent : suppression des en-têtes, URLs, numéros de page, lignes en majuscules
+- Paramètres `maxPages` et `skipPages` pour ignorer les pages de couverture
+- Numéro de page inclus dans chaque segment pour navigation contextuelle
+
 ### 📊 Statistiques & Audit
 - Tableau de bord administrateur : total documents, utilisateurs, téléchargements, lectures
 - Top 5 des documents les plus téléchargés
@@ -88,6 +97,7 @@
 | **IA conversationnelle** | Spring AI 0.8.1, Ollama, TinyLlama |
 | **Extraction PDF** | Apache PDFBox 3.0.2 |
 | **Text-to-Speech** | espeak-ng (local), Web Speech API |
+| **CC Sync** | ChunkingService (PDFBox) + VttSerializer (WebVTT) |
 | **Métadonnées livres** | OpenLibrary REST API |
 | **Notifications email** | Spring Boot Mail (SMTP Gmail) |
 | **Documentation API** | SpringDoc OpenAPI / Swagger UI 2.3.0 |
@@ -116,7 +126,14 @@ bibliotech/
 │   │   │   ├── audit/              # Journal d'audit asynchrone
 │   │   │   ├── notification/       # Service email (SMTP) + EmailProperties
 │   │   │   ├── openlibrary/        # Intégration OpenLibrary API (ISBN lookup + search)
-│   │   │   ├── tts/                # Text-to-Speech (PDFBox + espeak-ng)
+│   │   │   ├── tts/                # TTS + CC Sync
+│   │   │   │   ├── TtsController.java        # 4 endpoints (audio, text, captions, vtt)
+│   │   │   │   ├── TtsService.java           # Extraction texte + génération WAV
+│   │   │   │   ├── ChunkingService.java      # Découpage PDF en segments horodatés
+│   │   │   │   ├── VttSerializer.java        # Sérialisation WebVTT
+│   │   │   │   ├── CaptionSegment.java       # Record: index, startMs, endMs, text, page
+│   │   │   │   ├── TtsCaptionResponse.java   # Record: réponse JSON captions
+│   │   │   │   └── TtsTextResponse.java      # Record: réponse JSON texte brut
 │   │   │   ├── storage/            # Stockage fichiers PDF (StorageService + StorageProperties)
 │   │   │   ├── security/           # JwtAuthenticationFilter, JwtUtils, RateLimitFilter, UserDetailsServiceImpl
 │   │   │   ├── config/             # SecurityConfig, RestTemplateConfig
@@ -139,7 +156,7 @@ bibliotech/
 - **Maven 3.8+** — [Download](https://maven.apache.org/download.cgi)
 - **MySQL / MariaDB** — via XAMPP ou installation standalone
 - **Ollama** — [Download](https://ollama.com)
-- **espeak-ng** *(optionnel, pour TTS audio)* — [Download](https://github.com/espeak-ng/espeak-ng/releases)
+- **espeak-ng** *(optionnel, pour TTS audio + CC sync)* — [Download](https://github.com/espeak-ng/espeak-ng/releases)
 - **Git** — [Download](https://git-scm.com)
 
 ---
@@ -283,12 +300,52 @@ VALUES (
 | `POST` | `/api/chatbot/message` | Authentifié | Envoyer un message (`message`, `sessionId`) |
 | `DELETE` | `/api/chatbot/session/{sessionId}` | Authentifié | Effacer l'historique de session |
 
-### 🔊 Text-to-Speech
+### 🔊 Text-to-Speech & CC Sync
 
 | Méthode | Endpoint | Accès | Description |
 |---------|----------|-------|-------------|
 | `GET` | `/api/tts/documents/{id}/audio` | Authentifié | Génère un fichier WAV depuis le PDF (`langue` : `fr`/`en`) |
 | `GET` | `/api/tts/documents/{id}/text` | Authentifié | Texte extrait du PDF pour Web Speech API (`maxChars`) |
+| `GET` | `/api/tts/documents/{id}/captions` | Authentifié | Segments JSON horodatés (`maxPages`, `skipPages`) |
+| `GET` | `/api/tts/documents/{id}/vtt` | Authentifié | Fichier WebVTT téléchargeable (`maxPages`, `skipPages`) |
+
+#### Paramètres CC Sync
+
+| Paramètre | Défaut | Description |
+|-----------|--------|-------------|
+| `maxPages` | `10` | Nombre maximum de pages à traiter |
+| `skipPages` | `0` | Nombre de pages à ignorer depuis le début (ex: `1` pour sauter la couverture) |
+
+#### Exemple de réponse `/captions`
+
+```json
+{
+  "documentId": 1,
+  "titre": "Pride and Prejudice",
+  "totalSegments": 148,
+  "totalDurationMs": 707600,
+  "segments": [
+    { "index": 0, "startMs": 0,    "endMs": 4800,  "text": "This book arises from a deep knowledge of domestic life and the", "page": 2 },
+    { "index": 1, "startMs": 4800, "endMs": 9600,  "text": "human condition. It is a book full of satire, sharp, profound and", "page": 2 },
+    { "index": 2, "startMs": 9600, "endMs": 14400, "text": "anti-romantic at the same time. Pride and Prejudice has captivated several generations", "page": 2 }
+  ]
+}
+```
+
+#### Intégration front-end (pour Haitam)
+
+```jsx
+// Lecteur audio avec sous-titres synchronisés
+<audio controls src={`/api/tts/documents/${id}/audio`}>
+  <track
+    kind="captions"
+    src={`/api/tts/documents/${id}/vtt?skipPages=1`}
+    srcLang="fr"
+    label="Français"
+    default
+  />
+</audio>
+```
 
 ### 📖 OpenLibrary
 
@@ -339,10 +396,12 @@ Séquence de test recommandée :
 4. `GET /api/documents` → vérifier le catalogue paginé
 5. `GET /api/acces/documents/1/telecharger` → télécharger et tracer l'accès
 6. `POST /api/chatbot/message` → tester l'assistant
-7. `GET /api/tts/documents/1/text` → extraire le texte pour TTS
-8. `GET /api/stats` → consulter le tableau de bord
-9. `GET /api/audit` → consulter le journal d'audit
-10. `GET /api/openlibrary/isbn/9782100819775` → lookup ISBN
+7. `GET /api/tts/documents/1/audio` → générer l'audio WAV
+8. `GET /api/tts/documents/1/captions?skipPages=1` → vérifier les segments JSON
+9. `GET /api/tts/documents/1/vtt?skipPages=1` → télécharger le fichier WebVTT
+10. `GET /api/stats` → consulter le tableau de bord
+11. `GET /api/audit` → consulter le journal d'audit
+12. `GET /api/openlibrary/isbn/9782100819775` → lookup ISBN
 
 ---
 
@@ -357,7 +416,7 @@ Séquence de test recommandée :
 | `spring.ai.ollama.chat.options.model` | `tinyllama` | Modèle LLM Ollama |
 | `bibliotech.mail.enabled` | `false` | Activer/désactiver les emails |
 | `bibliotech.mail.from` | — | Adresse expéditeur |
-| `bibliotech.tts.max-chars` | `3000` | Limite de caractères pour le TTS |
+| `bibliotech.tts.max-chars` | `3000` | Limite de caractères pour le TTS audio |
 | `bibliotech.tts.max-pages` | `10` | Nombre max de pages extraites |
 
 ---
@@ -377,6 +436,7 @@ Séquence de test recommandée :
 - [x] Intégration OpenLibrary API
 - [x] Text-to-Speech (PDFBox + espeak-ng)
 - [x] Documentation Swagger/OpenAPI
+- [x] CC Sync — sous-titres WebVTT synchronisés
 - [ ] Front-end React.js (en cours — Haitam Khouna)
 - [ ] Pipeline RAG sur le contenu des PDFs
 - [ ] Export rapports PDF
