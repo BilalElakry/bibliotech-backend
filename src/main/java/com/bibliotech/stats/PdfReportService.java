@@ -79,7 +79,7 @@ public class PdfReportService {
 
     // ── Title ─────────────────────────────────────────────────────
     private void addTitle(Document doc) throws DocumentException {
-        Paragraph title = new Paragraph("📚 BiblioTech", FONT_TITLE);
+        Paragraph title = new Paragraph("📚 ScribeAI", FONT_TITLE);
         title.setAlignment(Element.ALIGN_CENTER);
         title.setSpacingAfter(4);
         doc.add(title);
