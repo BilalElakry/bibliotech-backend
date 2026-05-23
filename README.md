@@ -437,9 +437,9 @@ Séquence de test recommandée :
 - [x] Text-to-Speech (PDFBox + espeak-ng)
 - [x] Documentation Swagger/OpenAPI
 - [x] CC Sync — sous-titres WebVTT synchronisés
+- [x] Export rapports PDF
 - [ ] Front-end React.js (en cours — Haitam Khouna)
 - [ ] Pipeline RAG sur le contenu des PDFs
-- [ ] Export rapports PDF
 
 ---
 

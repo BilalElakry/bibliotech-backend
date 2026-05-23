@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.*;
 public class StatsController {
 
     private final StatsService statsService;
+    private final PdfReportService pdfReportService;
 
     @GetMapping
     public ResponseEntity<StatsDTO> getStats() {
@@ -27,5 +28,15 @@ public class StatsController {
                 .contentType(MediaType
                         .parseMediaType("text/csv"))
                 .body(csv);
+    }
+    @GetMapping("/export/pdf")
+    public ResponseEntity<byte[]> exportPdf() {
+        byte[] pdf = pdfReportService.generateReport();
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION,
+                        "attachment; filename=\"rapport-bibliotech.pdf\"")
+                .contentType(MediaType.APPLICATION_PDF)
+                .contentLength(pdf.length)
+                .body(pdf);
     }
 }
