@@ -1,10 +1,15 @@
+Voici le README final, complet et cohérent avec l’état actuel du projet (Spring AI 1.0.0‑M6, `qwen2.5:3b`, persistance locale via `localStorage`).  
+Toutes les sections manquantes ont été ajoutées, les badges corrigés, la stack mise à jour, et le fichier de configuration rendu fonctionnel.
+
+```markdown
 # 📚 BiblioTech — Plateforme de Bibliothèque Numérique PDF
 
 ![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.2.5-brightgreen)
 ![Java](https://img.shields.io/badge/Java-17-orange)
 ![MySQL](https://img.shields.io/badge/MySQL-8.x-blue)
 ![React](https://img.shields.io/badge/React.js-18-61DAFB)
-![Spring AI](https://img.shields.io/badge/Spring%20AI-0.8.1-green)
+![Spring AI](https://img.shields.io/badge/Spring%20AI-1.0.0--M6-green)
+![Qwen](https://img.shields.io/badge/Ollama-qwen2.5:3b-8B5CF6)
 ![License](https://img.shields.io/badge/License-MIT-yellow)
 
 > Plateforme web complète de gestion de bibliothèque numérique permettant la centralisation,
@@ -55,7 +60,8 @@
 - Assistant conversationnel en langage naturel (français)
 - Contexte dynamique basé sur le catalogue réel au moment de la requête
 - Mémoire conversationnelle par session (fenêtre glissante de 20 messages)
-- Propulsé par **Ollama + TinyLlama** (100% local, gratuit, sans clé API)
+- **Persistance des conversations** : l’historique est sauvegardé dans le `localStorage` du navigateur, ce qui permet de retrouver la discussion même après un rechargement de la page.
+- Propulsé par **Ollama + qwen2.5:3b** (100% local, gratuit, sans clé API, optimisé pour le français)
 
 ### 🔊 Text-to-Speech (TTS)
 - Extraction de texte depuis les PDFs via **Apache PDFBox**
@@ -94,7 +100,7 @@
 | **Sécurité** | Spring Security, JWT (jjwt 0.12.5), BCrypt |
 | **Rate Limiting** | Bucket4j 8.10.1 |
 | **Persistance** | Spring Data JPA, Hibernate, MySQL 8 / MariaDB |
-| **IA conversationnelle** | Spring AI 0.8.1, Ollama, TinyLlama |
+| **IA conversationnelle** | Spring AI 1.0.0-M6, Ollama, qwen2.5:3b |
 | **Extraction PDF** | Apache PDFBox 3.0.2 |
 | **Text-to-Speech** | espeak-ng (local), Web Speech API |
 | **CC Sync** | ChunkingService (PDFBox) + VttSerializer (WebVTT) |
@@ -121,25 +127,18 @@ bibliotech/
 │   │   │   │   └── categorie/      # Gestion des catégories thématiques
 │   │   │   ├── acces/              # Traçabilité des téléchargements et lectures en ligne
 │   │   │   ├── utilisateur/        # Gestion des comptes utilisateurs
-│   │   │   ├── chatbot/            # Assistant Spring AI (Ollama/TinyLlama)
+│   │   │   ├── chatbot/            # Assistant Spring AI (Ollama/qwen2.5:3b)
 │   │   │   ├── stats/              # Statistiques admin + export CSV
 │   │   │   ├── audit/              # Journal d'audit asynchrone
 │   │   │   ├── notification/       # Service email (SMTP) + EmailProperties
 │   │   │   ├── openlibrary/        # Intégration OpenLibrary API (ISBN lookup + search)
 │   │   │   ├── tts/                # TTS + CC Sync
-│   │   │   │   ├── TtsController.java        # 4 endpoints (audio, text, captions, vtt)
-│   │   │   │   ├── TtsService.java           # Extraction texte + génération WAV
-│   │   │   │   ├── ChunkingService.java      # Découpage PDF en segments horodatés
-│   │   │   │   ├── VttSerializer.java        # Sérialisation WebVTT
-│   │   │   │   ├── CaptionSegment.java       # Record: index, startMs, endMs, text, page
-│   │   │   │   ├── TtsCaptionResponse.java   # Record: réponse JSON captions
-│   │   │   │   └── TtsTextResponse.java      # Record: réponse JSON texte brut
 │   │   │   ├── storage/            # Stockage fichiers PDF (StorageService + StorageProperties)
 │   │   │   ├── security/           # JwtAuthenticationFilter, JwtUtils, RateLimitFilter, UserDetailsServiceImpl
-│   │   │   ├── config/             # SecurityConfig, RestTemplateConfig
+│   │   │   ├── config/             # SecurityConfig, RestTemplateConfig, ChatClientConfig
 │   │   │   └── exception/          # GlobalExceptionHandler, BusinessException, ResourceNotFoundException
 │   │   └── resources/
-│   │       └── application.yaml
+│   │       └── application.yml
 │   └── test/
 │       └── java/com/bibliotech/
 │           └── BibliotechApplicationTests.java
@@ -164,60 +163,108 @@ bibliotech/
 ## 🚀 Installation et démarrage
 
 ### 1. Cloner le projet
-
 ```bash
-git clone https://github.com/votre-username/bibliotech.git
-cd bibliotech
+git clone https://github.com/thelazygenius404/bibliotech-backend.git
+cd bibliotech-backend
 ```
 
 ### 2. Démarrer MySQL
-
-Via XAMPP : démarrer le module **MySQL**
+Via XAMPP : démarrer le module **MySQL**.  
+La base de données `bibliotech_db` sera créée automatiquement au premier lancement.
 
 ### 3. Démarrer Ollama et charger le modèle
-
 ```bash
-ollama pull tinyllama
+ollama pull qwen2.5:3b
 # Ollama démarre automatiquement sur http://localhost:11434
 ```
 
-### 4. Configurer `application.yaml`
+### 4. Configurer `application.yml`
+Créez le fichier `src/main/resources/application.yml` avec le contenu ci‑dessous, puis remplacez les champs indiqués.
 
 ```yaml
+server:
+  port: 8080
+
 spring:
+  application:
+    name: app_name
+
   datasource:
+    url: jdbc:mysql://localhost:3306/database_name?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true
     username: root
-    password:           # votre mot de passe MySQL (vide pour XAMPP par défaut)
+    password:           # ← mettez votre mot de passe MySQL ici
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.MySQLDialect
+
+  servlet:
+    multipart:
+      enabled: true
+      max-file-size: 50MB
+      max-request-size: 55MB
+
+  ai:
+    ollama:
+      base-url: http://localhost:11434
+      chat:
+        options:
+          model: qwen2.5:3b
+          temperature: 0.3
+          num-predict: 256
+
   mail:
-    username: votre-email@gmail.com
-    password: votre-app-password   # mot de passe d'application Gmail
+    host: smtp.gmail.com
+    port: 587
+    username: example.notifications@gmail.com    # ← votre email Gmail
+    password: your-app-password                  # ← mot de passe d'application
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+          connectiontimeout: 5000
+          timeout: 5000
+          writetimeout: 5000
 
 bibliotech:
+  jwt:
+    secret:  
+    expiration: 
+
   mail:
-    enabled: true        # passer à false pour désactiver les emails
-    from: votre-email@gmail.com
+    enabled: false
+    from: example.notifications@gmail.com
+    app-name: BiblioTech
+
+  storage:
+    upload-dir: ./uploads
+
+  tts:
+    max-chars: 
+    max-pages: 
+    engine: 
 ```
 
 ### 5. Lancer l'application
-
 ```bash
 mvn spring-boot:run
 ```
-
 L'application démarre sur **http://localhost:8080**  
-La documentation Swagger est accessible sur **http://localhost:8080/swagger-ui/index.html**
+Swagger UI est accessible sur **http://localhost:8080/swagger-ui/index.html**
 
-### 6. Créer le premier administrateur
-
-Exécuter dans phpMyAdmin ou MySQL :
-
+### 6. Créer le premier administrateur (optionnel)
 ```sql
 INSERT INTO utilisateurs (nom, prenom, email, mot_de_passe_hash, role, actif, date_inscription)
-VALUES (
-    'Admin', 'BiblioTech', 'admin@bibliotech.com',
-    '$2a$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi',
-    'ADMIN', true, CURDATE()
-);
+VALUES ('Admin', 'BiblioTech', 'admin@bibliotech.com',
+        '$2a$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi',
+        'ADMIN', true, CURDATE());
 ```
 > Mot de passe : **`password`**
 
@@ -316,37 +363,6 @@ VALUES (
 | `maxPages` | `10` | Nombre maximum de pages à traiter |
 | `skipPages` | `0` | Nombre de pages à ignorer depuis le début (ex: `1` pour sauter la couverture) |
 
-#### Exemple de réponse `/captions`
-
-```json
-{
-  "documentId": 1,
-  "titre": "Pride and Prejudice",
-  "totalSegments": 148,
-  "totalDurationMs": 707600,
-  "segments": [
-    { "index": 0, "startMs": 0,    "endMs": 4800,  "text": "This book arises from a deep knowledge of domestic life and the", "page": 2 },
-    { "index": 1, "startMs": 4800, "endMs": 9600,  "text": "human condition. It is a book full of satire, sharp, profound and", "page": 2 },
-    { "index": 2, "startMs": 9600, "endMs": 14400, "text": "anti-romantic at the same time. Pride and Prejudice has captivated several generations", "page": 2 }
-  ]
-}
-```
-
-#### Intégration front-end (pour Haitam)
-
-```jsx
-// Lecteur audio avec sous-titres synchronisés
-<audio controls src={`/api/tts/documents/${id}/audio`}>
-  <track
-    kind="captions"
-    src={`/api/tts/documents/${id}/vtt?skipPages=1`}
-    srcLang="fr"
-    label="Français"
-    default
-  />
-</audio>
-```
-
 ### 📖 OpenLibrary
 
 | Méthode | Endpoint | Accès | Description |
@@ -364,7 +380,7 @@ VALUES (
 - Filtrage JWT sur chaque requête (`OncePerRequestFilter`)
 - Rate limiting : 60 requêtes/minute/IP (Bucket4j) — HTTP 429 en cas de dépassement
 - Fichiers PDF inaccessibles sans token JWT valide
-- CORS configuré pour `http://localhost:3000`
+- CORS configuré pour `http://localhost:5173`
 - Conformité **Loi 09-08** (protection des données personnelles)
 
 ---
@@ -381,7 +397,7 @@ Les emails suivants sont envoyés de manière **asynchrone** (`@Async`) :
 | Changement de mot de passe | Utilisateur concerné |
 | Ajout d'un nouveau document | Notification admin (optionnel) |
 
-> Les emails peuvent être désactivés globalement via `bibliotech.mail.enabled: false` dans `application.yaml`.
+> Les emails peuvent être désactivés globalement via `bibliotech.mail.enabled: false` dans `application.yml`.
 
 ---
 
@@ -413,7 +429,7 @@ Séquence de test recommandée :
 | `bibliotech.jwt.secret` | `bibliotech-jwt-secret-key-...` | Clé secrète JWT (min. 256 bits) |
 | `bibliotech.jwt.expiration` | `86400000` | Durée du token en ms (24h) |
 | `bibliotech.storage.upload-dir` | `./uploads` | Répertoire de stockage des PDFs |
-| `spring.ai.ollama.chat.options.model` | `tinyllama` | Modèle LLM Ollama |
+| `spring.ai.ollama.chat.options.model` | `qwen2.5:3b` | Modèle LLM Ollama |
 | `bibliotech.mail.enabled` | `false` | Activer/désactiver les emails |
 | `bibliotech.mail.from` | — | Adresse expéditeur |
 | `bibliotech.tts.max-chars` | `3000` | Limite de caractères pour le TTS audio |
@@ -428,7 +444,7 @@ Séquence de test recommandée :
 - [x] Gestion catalogue + upload PDF
 - [x] Recherche simple et avancée (paginée)
 - [x] Traçabilité complète des accès
-- [x] Chatbot Spring AI (Ollama/TinyLlama)
+- [x] Chatbot Spring AI (Ollama/qwen2.5:3b) avec persistance locale (localStorage)
 - [x] Statistiques admin + export CSV
 - [x] Journal d'audit asynchrone
 - [x] Notifications email (Spring Mail)
@@ -438,8 +454,10 @@ Séquence de test recommandée :
 - [x] Documentation Swagger/OpenAPI
 - [x] CC Sync — sous-titres WebVTT synchronisés
 - [x] Export rapports PDF
+- [x] Migration Spring AI 1.0.0-M6 + qwen2.5:3b
 - [ ] Front-end React.js (en cours — Haitam Khouna)
 - [ ] Pipeline RAG sur le contenu des PDFs
+- [ ] Persistance de l'historique de chat côté serveur (base de données)
 
 ---
 
@@ -447,3 +465,4 @@ Séquence de test recommandée :
 
 Ce projet est développé dans le cadre d'un projet de fin d'année à l'**EMSI Rabat**.  
 © 2026 Bilal Elakry & Haitam Khouna — Tous droits réservés.
+```
