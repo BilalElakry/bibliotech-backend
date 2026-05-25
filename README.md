@@ -1,7 +1,3 @@
-Voici le README final, complet et cohérent avec l’état actuel du projet (Spring AI 1.0.0‑M6, `qwen2.5:3b`, persistance locale via `localStorage`).  
-Toutes les sections manquantes ont été ajoutées, les badges corrigés, la stack mise à jour, et le fichier de configuration rendu fonctionnel.
-
-```markdown
 # 📚 BiblioTech — Plateforme de Bibliothèque Numérique PDF
 
 ![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.2.5-brightgreen)
