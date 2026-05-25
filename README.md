@@ -60,7 +60,7 @@ Toutes les sections manquantes ont été ajoutées, les badges corrigés, la sta
 - Assistant conversationnel en langage naturel (français)
 - Contexte dynamique basé sur le catalogue réel au moment de la requête
 - Mémoire conversationnelle par session (fenêtre glissante de 20 messages)
-- **Persistance des conversations** : l’historique est sauvegardé dans le `localStorage` du navigateur, ce qui permet de retrouver la discussion même après un rechargement de la page.
+- **Persistance des conversations :** Historique complet sauvegardé en base de données (MySQL) pour une reprise de session transparente et sécurisée
 - Propulsé par **Ollama + qwen2.5:3b** (100% local, gratuit, sans clé API, optimisé pour le français)
 
 ### 🔊 Text-to-Speech (TTS)
@@ -457,8 +457,7 @@ Séquence de test recommandée :
 - [x] Migration Spring AI 1.0.0-M6 + qwen2.5:3b
 - [ ] Front-end React.js (en cours — Haitam Khouna)
 - [ ] Pipeline RAG sur le contenu des PDFs
-- [ ] Persistance de l'historique de chat côté serveur (base de données)
-
+- [x] Persistance de l'historique de chat côté serveur (base de données)
 ---
 
 ## 📄 Licence
