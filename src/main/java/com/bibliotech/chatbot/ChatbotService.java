@@ -1,6 +1,7 @@
 package com.bibliotech.chatbot;
 
 import com.bibliotech.catalogue.document.DocumentService;
+import com.bibliotech.rag.RagRetrievalService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
@@ -18,15 +19,32 @@ public class ChatbotService {
 
     private final ChatClient chatClient;
     private final DocumentService documentService;
-    private final ChatMessageRepository chatMessageRepository; // ✅ Injection de la DB
+    private final ChatMessageRepository chatMessageRepository;
+    private final RagRetrievalService ragRetrievalService; // NEW injection
 
-    private static final String SYSTEM_PROMPT = """
+    // Used when RAG returns relevant chunks
+    private static final String SYSTEM_PROMPT_RAG = """
+        Tu es ScribeAI, un assistant académique spécialisé en recherche documentaire.
+
+        Voici des extraits pertinents issus des documents de la bibliothèque :
+
+        %s
+
+        Réponds **toujours** en français, de manière concise et précise,
+        en te basant uniquement sur les extraits fournis.
+        Si l'information demandée n'est pas dans les extraits, dis-le clairement.
+        Ne fabrique jamais d'informations.
+        """;
+
+    // Used when RAG finds no relevant chunks (fallback)
+    private static final String SYSTEM_PROMPT_CATALOGUE = """
         Tu es ScribeAI, un assistant académique spécialisé en recherche documentaire.
         Voici les documents disponibles dans notre catalogue :
-        
+
         %s
-        
-        Réponds **toujours** en français, de manière courte et utile en te basant uniquement sur ces documents.
+
+        Réponds **toujours** en français, de manière courte et utile,
+        en te basant uniquement sur ces documents.
         Si le document demandé n'est pas dans le catalogue, dis-le honnêtement.
         """;
 
@@ -35,65 +53,67 @@ public class ChatbotService {
         String sid = (sessionId != null && !sessionId.isBlank())
                 ? sessionId : UUID.randomUUID().toString();
 
-        log.info("🚀 Début chat – session={} | userMessage='{}'", sid, truncate(userMessage, 80));
+        log.info("Chat – session={} | query='{}'", sid, truncate(userMessage, 80));
 
-        // 1. Sauvegarder le message de l'utilisateur en base
-        ChatMessage dbUserMsg = ChatMessage.builder()
+        // 1. Persist user message
+        chatMessageRepository.save(ChatMessage.builder()
                 .sessionId(sid)
                 .role("USER")
                 .content(userMessage)
-                .build();
-        chatMessageRepository.save(dbUserMsg);
+                .build());
 
-        // 2. Contexte catalogue
-        String catalogueContext = buildCatalogueContext();
+        // 2. Build system prompt: try RAG first, fall back to catalogue list
+        String ragContext = ragRetrievalService.retrieveContext(userMessage);
+        String systemContent;
 
-        // 3. Récupérer l'historique complet depuis MySQL
-        List<ChatMessage> dbHistory = chatMessageRepository.findBySessionIdOrderByTimestampAsc(sid);
-        log.info("🗂️ Historique DB récupéré – nombre de messages = {}", dbHistory.size());
+        if (!ragContext.isBlank()) {
+            systemContent = String.format(SYSTEM_PROMPT_RAG, ragContext);
+            log.info("RAG context injected ({} chars)", ragContext.length());
+        } else {
+            log.info("No RAG context — using catalogue fallback");
+            systemContent = String.format(SYSTEM_PROMPT_CATALOGUE,
+                    buildCatalogueContext());
+        }
 
-        // 4. Construction du prompt IA
+        // 3. Build conversation with sliding window (last 20 messages)
         List<Message> messages = new ArrayList<>();
-        messages.add(new SystemMessage(String.format(SYSTEM_PROMPT, catalogueContext)));
+        messages.add(new SystemMessage(systemContent));
 
-        // Convertir les entités DB en messages compris par Spring AI
-        for (ChatMessage msg : dbHistory) {
-            if ("USER".equals(msg.getRole())) {
+        List<ChatMessage> history = chatMessageRepository
+                .findBySessionIdOrderByTimestampAsc(sid);
+
+        List<ChatMessage> window = history.size() > 20
+                ? history.subList(history.size() - 20, history.size())
+                : history;
+
+        for (ChatMessage msg : window) {
+            if ("USER".equals(msg.getRole()))
                 messages.add(new UserMessage(msg.getContent()));
-            } else if ("AI".equals(msg.getRole())) {
+            else if ("AI".equals(msg.getRole()))
                 messages.add(new AssistantMessage(msg.getContent()));
-            }
         }
 
-        int totalChars = 0;
-        for (Message m : messages) {
-            if (m.getText() != null) totalChars += m.getText().length();
-        }
-        log.info("✉️ Prompt complet – {} messages, {} caractères au total", messages.size(), totalChars);
-
-        // 5. Appel à l'IA
+        // 4. Call qwen2.5:3b via Ollama (local, free)
         String reply;
         try {
-            long start = System.currentTimeMillis();
+            long t0 = System.currentTimeMillis();
             reply = chatClient.prompt(new Prompt(messages)).call().content();
-            long duration = System.currentTimeMillis() - start;
-            log.info("🤖 Réponse IA reçue en {} ms – longueur={}", duration, (reply != null ? reply.length() : 0));
+            log.info("LLM replied in {} ms", System.currentTimeMillis() - t0);
         } catch (Exception e) {
-            log.error("❌ Erreur ChatClient pour la session [{}]", sid, e);
-            throw new RuntimeException("Erreur de communication avec l'assistant IA", e);
+            log.error("LLM error – session [{}]: {}", sid, e.getMessage());
+            throw new RuntimeException(
+                    "Erreur de communication avec l'assistant IA", e);
         }
 
-        if (reply == null || reply.isBlank()) {
-            reply = "Je n’ai pas pu générer de réponse. Veuillez reformuler votre question.";
-        }
+        if (reply == null || reply.isBlank())
+            reply = "Je n'ai pas pu générer de réponse. Veuillez reformuler.";
 
-        // 6. Sauvegarder la réponse de l'IA en DB
-        ChatMessage dbAiMsg = ChatMessage.builder()
+        // 5. Persist AI response
+        chatMessageRepository.save(ChatMessage.builder()
                 .sessionId(sid)
                 .role("AI")
                 .content(reply)
-                .build();
-        chatMessageRepository.save(dbAiMsg);
+                .build());
 
         return new ChatResponse(reply, sid);
     }
@@ -102,13 +122,19 @@ public class ChatbotService {
         return chatMessageRepository.findBySessionIdOrderByTimestampAsc(sessionId);
     }
 
+    @Transactional
+    public void clearSession(String sessionId) {
+        chatMessageRepository.deleteBySessionId(sessionId);
+        log.info("Session cleared: {}", sessionId);
+    }
+
+    // ── Fallback: original catalogue listing ─────────────────────
     private String buildCatalogueContext() {
         var documents = documentService.findAllForRag();
         if (documents.isEmpty()) return "Aucun document disponible.";
-
         StringBuilder sb = new StringBuilder();
-        int maxDocs = Math.min(documents.size(), 5);
-        for (int i = 0; i < maxDocs; i++) {
+        int max = Math.min(documents.size(), 5);
+        for (int i = 0; i < max; i++) {
             var d = documents.get(i);
             sb.append(String.format(
                     "- \"%s\" de %s (%d) — Catégorie: %s — ISBN: %s\n",
@@ -116,18 +142,13 @@ public class ChatbotService {
                     d.getCategorie() != null ? d.getCategorie().getNom() : "N/A",
                     d.getIsbn()));
         }
-        String context = sb.toString();
-        return context.length() > 800 ? context.substring(0, 800) : context;
+        String ctx = sb.toString();
+        return ctx.length() > 800 ? ctx.substring(0, 800) : ctx;
     }
 
-    @Transactional
-    public void clearSession(String sessionId) {
-        chatMessageRepository.deleteBySessionId(sessionId);
-        log.info("🧽 Session effacée en base de données : {}", sessionId);
-    }
-
-    private String truncate(String str, int maxLen) {
-        if (str == null) return "null";
-        return str.length() <= maxLen ? str : str.substring(0, maxLen) + "...";
+    private String truncate(String s, int max) {
+        return s == null ? "null"
+                : s.length() <= max ? s
+                : s.substring(0, max) + "...";
     }
 }

@@ -3,6 +3,7 @@ package com.bibliotech.catalogue.document;
 import com.bibliotech.audit.*;
 import com.bibliotech.catalogue.categorie.*;
 import com.bibliotech.exception.*;
+import com.bibliotech.rag.RagIngestionService;
 import com.bibliotech.storage.StorageService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -23,6 +24,7 @@ public class DocumentService {
     private final CategorieRepository categorieRepo;
     private final StorageService storageService;
     private final AuditService auditService;
+    private final RagIngestionService ragIngestionService;
 
     // ── QUERIES ───────────────────────────────────────────────────
 
@@ -90,6 +92,10 @@ public class DocumentService {
 
         Document saved = documentRepo.save(doc);
 
+        if (pdfFile != null && !pdfFile.isEmpty()) {
+            ragIngestionService.ingest(saved.getId());
+        }
+
         auditService.log(AuditAction.UPLOAD, currentUser(),
                 "Document ajouté: \"" + saved.getTitre()
                         + "\" [ISBN: " + saved.getIsbn() + "]", "");
@@ -123,6 +129,10 @@ public class DocumentService {
 
         Document saved = documentRepo.save(doc);
 
+        if (pdfFile != null && !pdfFile.isEmpty()) {
+            ragIngestionService.ingest(saved.getId());
+        }
+
         auditService.log(AuditAction.UPDATE, currentUser(),
                 "Document modifié: \"" + saved.getTitre()
                         + "\" [id: " + id + "]", "");
@@ -136,6 +146,7 @@ public class DocumentService {
         String titre = doc.getTitre();
         if (doc.getFichierPdf() != null)
             storageService.delete(doc.getFichierPdf());
+        ragIngestionService.deleteByDocumentId(id);
         documentRepo.deleteById(id);
 
         auditService.log(AuditAction.DELETE, currentUser(),

@@ -32,6 +32,20 @@ spring:
         options:
           model: qwen2.5:3b
           temperature: 0.7
+      # NEW: embedding model via Ollama (free, local)
+      embedding:
+        options:
+          model: nomic-embed-text
+    # NEW: Qdrant Cloud vector store
+    vectorstore:
+      qdrant:
+        host: 0fd6fa2b-f39e-4120-aeb0-b909219299a5.europe-west6-0.gcp.cloud.qdrant.io        # e.g. abc123.eu-central.aws.cloud.qdrant.io
+        port: 6334                  # Qdrant Cloud gRPC port (always 6334)
+        api-key: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhY2Nlc3MiOiJtIiwic3ViamVjdCI6ImFwaS1rZXk6MGEzZTZkMWYtYTFhZC00NDkyLWE1NTgtMjdmNWJiMTdlM2U3In0.5nV7CbYmIvMti8EgIvtGDhdSvUW9w7M0lIkTb-3Tyt8
+        collection-name: bibliotech-rag
+        use-tls: true               # required for Qdrant Cloud
+        initialize-schema: true     # auto-creates collection on first startup
+
   mail:
     host: smtp.gmail.com
     port: 587
@@ -61,3 +75,9 @@ bibliotech:
     max-chars: 3000
     max-pages: 10
     engine: espeak  # ou "marytts"
+  rag:
+    enabled: true
+    chunk-size: 500       # tokens per chunk
+    chunk-overlap: 50     # overlap between consecutive chunks
+    top-k: 5              # chunks retrieved per query
+    min-score: 0.50       # minimum cosine similarity (0.0 - 1.0)

@@ -6,12 +6,14 @@
 ![React](https://img.shields.io/badge/React.js-18-61DAFB)
 ![Spring AI](https://img.shields.io/badge/Spring%20AI-1.0.0--M6-green)
 ![Qwen](https://img.shields.io/badge/Ollama-qwen2.5:3b-8B5CF6)
+![Qdrant](https://img.shields.io/badge/Qdrant-Cloud-red)
 ![License](https://img.shields.io/badge/License-MIT-yellow)
 
 > Plateforme web complète de gestion de bibliothèque numérique permettant la centralisation,
 > la gestion et la diffusion sécurisée de ressources documentaires au format PDF,
-> enrichie d'un assistant conversationnel intelligent basé sur Spring AI, d'un module
-> Text-to-Speech (TTS) et d'un système de sous-titres synchronisés (CC Sync / WebVTT).
+> enrichie d'un assistant conversationnel intelligent basé sur Spring AI avec pipeline RAG
+> (Retrieval-Augmented Generation), d'un module Text-to-Speech (TTS) et d'un système
+> de sous-titres synchronisés (CC Sync / WebVTT).
 
 ---
 
@@ -19,7 +21,7 @@
 
 | Membre | Rôle |
 |--------|------|
-| **Bilal Elakry** | Back-end, Sécurité JWT, StorageService, Chatbot Spring AI, TTS, CC Sync, Audit, Stats, OpenLibrary |
+| **Bilal Elakry** | Back-end, Sécurité JWT, StorageService, Chatbot Spring AI, Pipeline RAG, TTS, CC Sync, Audit, Stats, OpenLibrary |
 | **Haitam Khouna** | Diagrammes UML, Module Documents, Interface React.js |
 
 **Encadrante :** Mme Aarich Mounia  
@@ -52,11 +54,18 @@
 - Compteur de téléchargements par document
 - Email de confirmation automatique à chaque téléchargement
 
-### 🤖 Chatbot Spring AI
+### 🤖 Chatbot Spring AI + Pipeline RAG
 - Assistant conversationnel en langage naturel (français)
-- Contexte dynamique basé sur le catalogue réel au moment de la requête
+- **Pipeline RAG (Retrieval-Augmented Generation)** : le chatbot répond en se basant sur le contenu réel des PDFs, pas uniquement sur les métadonnées du catalogue
+- Extraction de texte PDF via **Apache PDFBox**, découpage en chunks via **TokenTextSplitter**
+- Embeddings sémantiques générés localement par **nomic-embed-text** (Ollama, 768 dimensions)
+- Stockage vectoriel dans **Qdrant Cloud** (gratuit, cosine similarity)
+- Recherche sémantique des chunks les plus pertinents (top-k configurable)
+- Fallback automatique sur le catalogue si aucun chunk ne dépasse le seuil de similarité
 - Mémoire conversationnelle par session (fenêtre glissante de 20 messages)
-- **Persistance des conversations :** Historique complet sauvegardé en base de données (MySQL) pour une reprise de session transparente et sécurisée
+- **Persistance des conversations** : historique complet sauvegardé en base de données (MySQL)
+- Ingestion RAG **asynchrone** (`@Async`) — non-bloquante pour les uploads PDF
+- Ré-ingestion automatique à chaque mise à jour de PDF ; suppression des vecteurs à la suppression du document
 - Propulsé par **Ollama + qwen2.5:3b** (100% local, gratuit, sans clé API, optimisé pour le français)
 
 ### 🔊 Text-to-Speech (TTS)
@@ -79,6 +88,7 @@
 - Top 5 des documents les plus téléchargés
 - 10 accès les plus récents
 - Export CSV des historiques d'accès
+- Export PDF du rapport statistique (OpenPDF)
 - Journal d'audit complet (actions LOGIN, UPLOAD, DELETE, DOWNLOAD, etc.) avec niveaux INFO / WARNING / ERROR
 - Journalisation asynchrone (`@Async`) pour ne pas bloquer les requêtes
 
@@ -97,6 +107,9 @@
 | **Rate Limiting** | Bucket4j 8.10.1 |
 | **Persistance** | Spring Data JPA, Hibernate, MySQL 8 / MariaDB |
 | **IA conversationnelle** | Spring AI 1.0.0-M6, Ollama, qwen2.5:3b |
+| **RAG — Embeddings** | nomic-embed-text (Ollama, local, 768 dims) |
+| **RAG — Vector Store** | Qdrant Cloud (free cluster, cosine similarity) |
+| **RAG — Chunking** | TokenTextSplitter (Spring AI, GPT-2 tokenizer) |
 | **Extraction PDF** | Apache PDFBox 3.0.2 |
 | **Text-to-Speech** | espeak-ng (local), Web Speech API |
 | **CC Sync** | ChunkingService (PDFBox) + VttSerializer (WebVTT) |
@@ -104,6 +117,7 @@
 | **Notifications email** | Spring Boot Mail (SMTP Gmail) |
 | **Documentation API** | SpringDoc OpenAPI / Swagger UI 2.3.0 |
 | **Stockage PDF** | Système de fichiers local (StorageService) |
+| **Rapport PDF** | OpenPDF 1.3.43 |
 | **Front-end** | React.js 18 (à venir) |
 | **Tests** | Postman, Spring Boot Test |
 | **Outils** | IntelliJ IDEA, Maven, Git, XAMPP |
@@ -123,8 +137,14 @@ bibliotech/
 │   │   │   │   └── categorie/      # Gestion des catégories thématiques
 │   │   │   ├── acces/              # Traçabilité des téléchargements et lectures en ligne
 │   │   │   ├── utilisateur/        # Gestion des comptes utilisateurs
-│   │   │   ├── chatbot/            # Assistant Spring AI (Ollama/qwen2.5:3b)
-│   │   │   ├── stats/              # Statistiques admin + export CSV
+│   │   │   ├── chatbot/            # Assistant Spring AI (Ollama/qwen2.5:3b) + persistance DB
+│   │   │   ├── rag/                # Pipeline RAG (ingestion + retrieval + admin)
+│   │   │   │   ├── RagProperties.java          # Configuration externalisée
+│   │   │   │   ├── RagIngestionService.java    # PDF → chunks → embeddings → Qdrant
+│   │   │   │   ├── RagRetrievalService.java    # Query → Qdrant → context string
+│   │   │   │   ├── RagAdminController.java     # POST /api/rag/ingest/{id|all}
+│   │   │   │   └── QdrantIndexInitializer.java # Création auto de l'index payload au démarrage
+│   │   │   ├── stats/              # Statistiques admin + export CSV + export PDF
 │   │   │   ├── audit/              # Journal d'audit asynchrone
 │   │   │   ├── notification/       # Service email (SMTP) + EmailProperties
 │   │   │   ├── openlibrary/        # Intégration OpenLibrary API (ISBN lookup + search)
@@ -151,6 +171,7 @@ bibliotech/
 - **Maven 3.8+** — [Download](https://maven.apache.org/download.cgi)
 - **MySQL / MariaDB** — via XAMPP ou installation standalone
 - **Ollama** — [Download](https://ollama.com)
+- **Qdrant Cloud** — [Free cluster](https://cloud.qdrant.io) (gratuit, sans carte bancaire)
 - **espeak-ng** *(optionnel, pour TTS audio + CC sync)* — [Download](https://github.com/espeak-ng/espeak-ng/releases)
 - **Git** — [Download](https://git-scm.com)
 
@@ -168,14 +189,25 @@ cd bibliotech-backend
 Via XAMPP : démarrer le module **MySQL**.  
 La base de données `bibliotech_db` sera créée automatiquement au premier lancement.
 
-### 3. Démarrer Ollama et charger le modèle
+### 3. Démarrer Ollama et charger les modèles
 ```bash
+# Modèle LLM (génération de réponses)
 ollama pull qwen2.5:3b
+
+# Modèle d'embedding RAG (274 MB, gratuit, local)
+ollama pull nomic-embed-text
+
 # Ollama démarre automatiquement sur http://localhost:11434
 ```
 
-### 4. Configurer `application.yml`
-Créez le fichier `src/main/resources/application.yml` avec le contenu ci‑dessous, puis remplacez les champs indiqués.
+### 4. Créer le cluster Qdrant Cloud (gratuit)
+1. Aller sur https://cloud.qdrant.io → créer un compte
+2. **Create Cluster** → Free tier → choisir une région
+3. Copier le **Cluster URL** (ex: `abc123.eu-central.aws.cloud.qdrant.io`)
+4. Créer une **API Key** dans Settings → API Keys
+
+### 5. Configurer `application.yml`
+Créez le fichier `src/main/resources/application.yml` :
 
 ```yaml
 server:
@@ -183,13 +215,12 @@ server:
 
 spring:
   application:
-    name: app_name
+    name: bibliotech
 
   datasource:
-    url: jdbc:mysql://localhost:3306/database_name?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true
+    url: jdbc:mysql://localhost:3306/bibliotech_db?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true
     username: root
-    password:           # ← mettez votre mot de passe MySQL ici
-    driver-class-name: com.mysql.cj.jdbc.Driver
+    password:           # ← votre mot de passe MySQL
 
   jpa:
     hibernate:
@@ -213,49 +244,77 @@ spring:
           model: qwen2.5:3b
           temperature: 0.3
           num-predict: 256
+      embedding:
+        options:
+          model: nomic-embed-text   # modèle d'embedding RAG
+
+    vectorstore:
+      qdrant:
+        host: your-cluster.eu-central.aws.cloud.qdrant.io  # ← sans https://
+        port: 6334
+        api-key: your-qdrant-api-key
+        collection-name: bibliotech-rag
+        use-tls: true
+        initialize-schema: true
 
   mail:
     host: smtp.gmail.com
     port: 587
-    username: example.notifications@gmail.com    # ← votre email Gmail
-    password: your-app-password                  # ← mot de passe d'application
+    username: your-email@gmail.com
+    password: your-app-password
     properties:
       mail:
         smtp:
           auth: true
           starttls:
             enable: true
-          connectiontimeout: 5000
-          timeout: 5000
-          writetimeout: 5000
 
 bibliotech:
   jwt:
-    secret:  
-    expiration: 
+    secret: bibliotech-jwt-secret-key-2026-bilal-haitam-emsi-rabat
+    expiration: 86400000
 
   mail:
     enabled: false
-    from: example.notifications@gmail.com
+    from: your-email@gmail.com
     app-name: BiblioTech
 
   storage:
     upload-dir: ./uploads
 
   tts:
-    max-chars: 
-    max-pages: 
-    engine: 
+    max-chars: 3000
+    max-pages: 10
+    engine: espeak
+
+  rag:
+    enabled: true
+    chunk-size: 500       # tokens par chunk
+    chunk-overlap: 50     # chevauchement entre chunks
+    top-k: 3              # chunks récupérés par requête
+    min-score: 0.60       # seuil minimum de similarité cosinus
 ```
 
-### 5. Lancer l'application
+### 6. Lancer l'application
 ```bash
 mvn spring-boot:run
 ```
-L'application démarre sur **http://localhost:8080**  
-Swagger UI est accessible sur **http://localhost:8080/swagger-ui/index.html**
 
-### 6. Créer le premier administrateur (optionnel)
+L'application démarre sur **http://localhost:8080**  
+Swagger UI : **http://localhost:8080/swagger-ui/index.html**
+
+Au démarrage, l'index payload Qdrant sur le champ `documentId` est créé automatiquement.
+
+### 7. Ingérer les documents existants dans Qdrant
+Si vous avez déjà des documents en base, lancez cette requête une seule fois :
+```
+POST /api/rag/ingest/all
+Authorization: Bearer <admin_token>
+```
+
+Les nouveaux documents sont ingérés automatiquement à chaque upload.
+
+### 8. Créer le premier administrateur (optionnel)
 ```sql
 INSERT INTO utilisateurs (nom, prenom, email, mot_de_passe_hash, role, actif, date_inscription)
 VALUES ('Admin', 'BiblioTech', 'admin@bibliotech.com',
@@ -280,34 +339,32 @@ VALUES ('Admin', 'BiblioTech', 'admin@bibliotech.com',
 
 | Méthode | Endpoint | Accès | Description |
 |---------|----------|-------|-------------|
-| `GET` | `/api/documents` | Authentifié | Liste paginée / recherche (`q`, `categorieId`, `sortBy`, `direction`) |
-| `GET` | `/api/documents/advanced` | Authentifié | Recherche avancée (`q`, `categorieId`, `anneeMin`, `anneeMax`) |
+| `GET` | `/api/documents` | Authentifié | Liste paginée / recherche |
+| `GET` | `/api/documents/advanced` | Authentifié | Recherche avancée |
 | `GET` | `/api/documents/{id}` | Authentifié | Détails d'un document |
-| `POST` | `/api/documents` | Admin | Ajouter un document + upload PDF (multipart) |
-| `PUT` | `/api/documents/{id}` | Admin | Modifier un document (+ remplacement PDF optionnel) |
-| `DELETE` | `/api/documents/{id}` | Admin | Supprimer un document (+ suppression du fichier PDF) |
-| `GET` | `/api/documents/{id}/pdf` | Authentifié | Télécharger le PDF (attachment) |
-| `GET` | `/api/documents/{id}/pdf/inline` | Authentifié | Lire le PDF en ligne (inline) |
+| `POST` | `/api/documents` | Admin | Ajouter + upload PDF (déclenche ingestion RAG) |
+| `PUT` | `/api/documents/{id}` | Admin | Modifier (ré-ingestion RAG si nouveau PDF) |
+| `DELETE` | `/api/documents/{id}` | Admin | Supprimer (supprime les vecteurs Qdrant) |
+| `GET` | `/api/documents/{id}/pdf` | Authentifié | Télécharger le PDF |
+| `GET` | `/api/documents/{id}/pdf/inline` | Authentifié | Lire le PDF en ligne |
 
 ### 📁 Catégories
 
 | Méthode | Endpoint | Accès | Description |
 |---------|----------|-------|-------------|
 | `GET` | `/api/categories` | Admin | Liste des catégories |
-| `GET` | `/api/categories/{id}` | Admin | Détails d'une catégorie |
 | `POST` | `/api/categories` | Admin | Créer une catégorie |
 | `PUT` | `/api/categories/{id}` | Admin | Modifier une catégorie |
-| `DELETE` | `/api/categories/{id}` | Admin | Supprimer (refus si des documents y sont rattachés) |
+| `DELETE` | `/api/categories/{id}` | Admin | Supprimer (refus si documents liés) |
 
 ### 👥 Utilisateurs
 
 | Méthode | Endpoint | Accès | Description |
 |---------|----------|-------|-------------|
 | `GET` | `/api/utilisateurs` | Admin | Liste de tous les utilisateurs |
-| `GET` | `/api/utilisateurs/{id}` | Admin | Détails d'un utilisateur |
-| `POST` | `/api/utilisateurs` | Admin | Créer un compte utilisateur |
-| `PATCH` | `/api/utilisateurs/{id}/toggle` | Admin | Activer / Désactiver un compte |
-| `DELETE` | `/api/utilisateurs/{id}` | Admin | Supprimer un compte |
+| `POST` | `/api/utilisateurs` | Admin | Créer un compte |
+| `PATCH` | `/api/utilisateurs/{id}/toggle` | Admin | Activer / Désactiver |
+| `DELETE` | `/api/utilisateurs/{id}` | Admin | Supprimer |
 | `GET` | `/api/utilisateurs/me` | Authentifié | Mon profil |
 | `PUT` | `/api/utilisateurs/me/password` | Authentifié | Changer mon mot de passe |
 
@@ -315,17 +372,18 @@ VALUES ('Admin', 'BiblioTech', 'admin@bibliotech.com',
 
 | Méthode | Endpoint | Accès | Description |
 |---------|----------|-------|-------------|
-| `GET` | `/api/acces/documents/{id}/telecharger` | Authentifié | Télécharger + enregistrer l'accès |
-| `GET` | `/api/acces/documents/{id}/lire` | Authentifié | Lire en ligne + enregistrer l'accès |
-| `GET` | `/api/acces/mon-historique` | Authentifié | Historique de mes accès |
-| `GET` | `/api/acces/utilisateurs/{userId}` | Admin | Historique d'accès d'un utilisateur |
+| `GET` | `/api/acces/documents/{id}/telecharger` | Authentifié | Télécharger + tracer l'accès |
+| `GET` | `/api/acces/documents/{id}/lire` | Authentifié | Lire en ligne + tracer l'accès |
+| `GET` | `/api/acces/mon-historique` | Authentifié | Mon historique d'accès |
+| `GET` | `/api/acces/utilisateurs/{userId}` | Admin | Historique d'un utilisateur |
 
 ### 📊 Statistiques
 
 | Méthode | Endpoint | Accès | Description |
 |---------|----------|-------|-------------|
-| `GET` | `/api/stats` | Admin | Tableau de bord complet (totaux + top 5 + accès récents) |
-| `GET` | `/api/stats/export/csv` | Admin | Export CSV de tous les accès |
+| `GET` | `/api/stats` | Admin | Tableau de bord complet |
+| `GET` | `/api/stats/export/csv` | Admin | Export CSV des accès |
+| `GET` | `/api/stats/export/pdf` | Admin | Export PDF du rapport statistique |
 
 ### 🗂️ Audit
 
@@ -334,37 +392,81 @@ VALUES ('Admin', 'BiblioTech', 'admin@bibliotech.com',
 | `GET` | `/api/audit` | Admin | Journal paginé de toutes les actions |
 | `GET` | `/api/audit/recent` | Admin | 20 actions les plus récentes |
 | `GET` | `/api/audit/errors` | Admin | Actions en erreur uniquement |
-| `GET` | `/api/audit/utilisateurs/{email}` | Admin | Journal paginé par utilisateur |
+| `GET` | `/api/audit/utilisateurs/{email}` | Admin | Journal par utilisateur |
 
-### 🤖 Chatbot
+### 🤖 Chatbot RAG
 
 | Méthode | Endpoint | Accès | Description |
 |---------|----------|-------|-------------|
-| `POST` | `/api/chatbot/message` | Authentifié | Envoyer un message (`message`, `sessionId`) |
+| `POST` | `/api/chatbot/message` | Authentifié | Envoyer un message (RAG + fallback catalogue) |
+| `GET` | `/api/chatbot/history/{sessionId}` | Authentifié | Récupérer l'historique d'une session |
 | `DELETE` | `/api/chatbot/session/{sessionId}` | Authentifié | Effacer l'historique de session |
+
+### 🧠 RAG — Administration
+
+| Méthode | Endpoint | Accès | Description |
+|---------|----------|-------|-------------|
+| `POST` | `/api/rag/ingest/{id}` | Admin | Ingérer un document spécifique dans Qdrant |
+| `POST` | `/api/rag/ingest/all` | Admin | Ingérer tous les documents (backfill initial) |
 
 ### 🔊 Text-to-Speech & CC Sync
 
 | Méthode | Endpoint | Accès | Description |
 |---------|----------|-------|-------------|
-| `GET` | `/api/tts/documents/{id}/audio` | Authentifié | Génère un fichier WAV depuis le PDF (`langue` : `fr`/`en`) |
-| `GET` | `/api/tts/documents/{id}/text` | Authentifié | Texte extrait du PDF pour Web Speech API (`maxChars`) |
-| `GET` | `/api/tts/documents/{id}/captions` | Authentifié | Segments JSON horodatés (`maxPages`, `skipPages`) |
-| `GET` | `/api/tts/documents/{id}/vtt` | Authentifié | Fichier WebVTT téléchargeable (`maxPages`, `skipPages`) |
-
-#### Paramètres CC Sync
-
-| Paramètre | Défaut | Description |
-|-----------|--------|-------------|
-| `maxPages` | `10` | Nombre maximum de pages à traiter |
-| `skipPages` | `0` | Nombre de pages à ignorer depuis le début (ex: `1` pour sauter la couverture) |
+| `GET` | `/api/tts/documents/{id}/audio` | Authentifié | Génère un fichier WAV |
+| `GET` | `/api/tts/documents/{id}/text` | Authentifié | Texte extrait pour Web Speech API |
+| `GET` | `/api/tts/documents/{id}/captions` | Authentifié | Segments JSON horodatés |
+| `GET` | `/api/tts/documents/{id}/vtt` | Authentifié | Fichier WebVTT téléchargeable |
 
 ### 📖 OpenLibrary
 
 | Méthode | Endpoint | Accès | Description |
 |---------|----------|-------|-------------|
-| `GET` | `/api/openlibrary/isbn/{isbn}` | Admin | Récupérer les métadonnées d'un livre par ISBN |
-| `GET` | `/api/openlibrary/search?q=...&limit=10` | Admin | Rechercher des livres par mot-clé |
+| `GET` | `/api/openlibrary/isbn/{isbn}` | Admin | Métadonnées par ISBN |
+| `GET` | `/api/openlibrary/search?q=...` | Admin | Recherche par mot-clé |
+
+---
+
+## 🧠 Architecture RAG
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  INGESTION (déclenchée @Async à chaque upload PDF)          │
+│                                                             │
+│  POST /api/documents  ──►  DocumentService.create()         │
+│                                  │                          │
+│                                  ▼                          │
+│                    RagIngestionService.ingest()             │
+│                          │                                  │
+│                 PDFBox text extraction (full doc)           │
+│                          │                                  │
+│                 TokenTextSplitter (500 tokens, overlap 50)  │
+│                          │                                  │
+│                 nomic-embed-text (Ollama, local, 768 dims)  │
+│                          │                                  │
+│                 Qdrant Cloud (FREE) ← vecteurs stockés      │
+└─────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────┐
+│  RETRIEVAL (à chaque message chatbot)                       │
+│                                                             │
+│  POST /api/chatbot/message                                  │
+│         │                                                   │
+│         ▼                                                   │
+│  RagRetrievalService.retrieveContext(userQuery)             │
+│         │                                                   │
+│  nomic-embed-text embed query → Qdrant similarity search    │
+│         │                                                   │
+│  top-3 chunks (score ≥ 0.60) → formatted context string    │
+│         │                                                   │
+│  [RAG context] + [conversation history] → qwen2.5:3b       │
+│         │                                                   │
+│  Grounded French response → saved to MySQL                  │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**Fallback automatique :** si aucun chunk ne dépasse le seuil de similarité,
+le chatbot bascule sur la liste des documents du catalogue (comportement original).
 
 ---
 
@@ -377,13 +479,10 @@ VALUES ('Admin', 'BiblioTech', 'admin@bibliotech.com',
 - Rate limiting : 60 requêtes/minute/IP (Bucket4j) — HTTP 429 en cas de dépassement
 - Fichiers PDF inaccessibles sans token JWT valide
 - CORS configuré pour `http://localhost:5173`
-- Conformité **Loi 09-08** (protection des données personnelles)
 
 ---
 
 ## 📧 Notifications email
-
-Les emails suivants sont envoyés de manière **asynchrone** (`@Async`) :
 
 | Événement | Destinataire |
 |-----------|-------------|
@@ -391,45 +490,30 @@ Les emails suivants sont envoyés de manière **asynchrone** (`@Async`) :
 | Téléchargement d'un document | Utilisateur (confirmation) |
 | Activation / désactivation du compte | Utilisateur concerné |
 | Changement de mot de passe | Utilisateur concerné |
-| Ajout d'un nouveau document | Notification admin (optionnel) |
 
-> Les emails peuvent être désactivés globalement via `bibliotech.mail.enabled: false` dans `application.yml`.
-
----
-
-## 🧪 Tests API
-
-Importer la collection Postman depuis le dossier `/postman` du projet.
-
-Séquence de test recommandée :
-1. `POST /api/auth/login` → récupérer le token JWT
-2. `POST /api/categories` → créer une catégorie
-3. `POST /api/documents` (multipart) → uploader un document PDF
-4. `GET /api/documents` → vérifier le catalogue paginé
-5. `GET /api/acces/documents/1/telecharger` → télécharger et tracer l'accès
-6. `POST /api/chatbot/message` → tester l'assistant
-7. `GET /api/tts/documents/1/audio` → générer l'audio WAV
-8. `GET /api/tts/documents/1/captions?skipPages=1` → vérifier les segments JSON
-9. `GET /api/tts/documents/1/vtt?skipPages=1` → télécharger le fichier WebVTT
-10. `GET /api/stats` → consulter le tableau de bord
-11. `GET /api/audit` → consulter le journal d'audit
-12. `GET /api/openlibrary/isbn/9782100819775` → lookup ISBN
+> Les emails peuvent être désactivés via `bibliotech.mail.enabled: false`.
 
 ---
 
 ## 📝 Variables de configuration
 
-| Propriété | Valeur par défaut | Description |
-|-----------|-------------------|-------------|
-| `spring.datasource.password` | *(vide)* | Mot de passe MySQL |
-| `bibliotech.jwt.secret` | `bibliotech-jwt-secret-key-...` | Clé secrète JWT (min. 256 bits) |
-| `bibliotech.jwt.expiration` | `86400000` | Durée du token en ms (24h) |
-| `bibliotech.storage.upload-dir` | `./uploads` | Répertoire de stockage des PDFs |
-| `spring.ai.ollama.chat.options.model` | `qwen2.5:3b` | Modèle LLM Ollama |
-| `bibliotech.mail.enabled` | `false` | Activer/désactiver les emails |
-| `bibliotech.mail.from` | — | Adresse expéditeur |
-| `bibliotech.tts.max-chars` | `3000` | Limite de caractères pour le TTS audio |
-| `bibliotech.tts.max-pages` | `10` | Nombre max de pages extraites |
+| Propriété | Description |
+|-----------|-------------|
+| `spring.datasource.password` | Mot de passe MySQL |
+| `bibliotech.jwt.secret` | Clé secrète JWT (min. 256 bits) |
+| `bibliotech.jwt.expiration` | Durée du token en ms (défaut 86400000 = 24h) |
+| `bibliotech.storage.upload-dir` | Répertoire de stockage des PDFs |
+| `spring.ai.ollama.chat.options.model` | Modèle LLM Ollama |
+| `spring.ai.ollama.embedding.options.model` | Modèle d'embedding (nomic-embed-text) |
+| `spring.ai.vectorstore.qdrant.host` | Host Qdrant Cloud (sans https://) |
+| `spring.ai.vectorstore.qdrant.api-key` | Clé API Qdrant Cloud |
+| `spring.ai.vectorstore.qdrant.collection-name` | Nom de la collection (défaut: bibliotech-rag) |
+| `bibliotech.rag.enabled` | Activer/désactiver le pipeline RAG |
+| `bibliotech.rag.chunk-size` | Tokens par chunk (défaut: 500) |
+| `bibliotech.rag.chunk-overlap` | Chevauchement entre chunks (défaut: 50) |
+| `bibliotech.rag.top-k` | Chunks récupérés par requête (défaut: 3) |
+| `bibliotech.rag.min-score` | Seuil minimum similarité cosinus (défaut: 0.60) |
+| `bibliotech.mail.enabled` | Activer/désactiver les emails |
 
 ---
 
@@ -440,8 +524,8 @@ Séquence de test recommandée :
 - [x] Gestion catalogue + upload PDF
 - [x] Recherche simple et avancée (paginée)
 - [x] Traçabilité complète des accès
-- [x] Chatbot Spring AI (Ollama/qwen2.5:3b) avec persistance locale (localStorage)
-- [x] Statistiques admin + export CSV
+- [x] Chatbot Spring AI (Ollama/qwen2.5:3b) avec persistance DB
+- [x] Statistiques admin + export CSV + export PDF
 - [x] Journal d'audit asynchrone
 - [x] Notifications email (Spring Mail)
 - [x] Rate limiting (Bucket4j)
@@ -449,15 +533,12 @@ Séquence de test recommandée :
 - [x] Text-to-Speech (PDFBox + espeak-ng)
 - [x] Documentation Swagger/OpenAPI
 - [x] CC Sync — sous-titres WebVTT synchronisés
-- [x] Export rapports PDF
-- [x] Migration Spring AI 1.0.0-M6 + qwen2.5:3b
+- [x] **Pipeline RAG (nomic-embed-text + Qdrant Cloud) — réponses ancrées dans le contenu des PDFs**
 - [ ] Front-end React.js (en cours — Haitam Khouna)
-- [ ] Pipeline RAG sur le contenu des PDFs
-- [x] Persistance de l'historique de chat côté serveur (base de données)
+
 ---
 
 ## 📄 Licence
 
 Ce projet est développé dans le cadre d'un projet de fin d'année à l'**EMSI Rabat**.  
 © 2026 Bilal Elakry & Haitam Khouna — Tous droits réservés.
-```
