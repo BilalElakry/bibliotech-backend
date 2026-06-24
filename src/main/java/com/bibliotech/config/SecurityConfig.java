@@ -46,6 +46,9 @@ public class SecurityConfig {
                                 "/v3/api-docs/**").permitAll()
                         .requestMatchers(HttpMethod.GET,
                                 "/api/documents/**").authenticated()
+                        // 🔽 Nouvelle règle – autorise les utilisateurs authentifiés pour les endpoints AI
+                        .requestMatchers(HttpMethod.POST, "/api/documents/*/ai/**").authenticated()
+                        // Règle existante – ADMIN requis pour toute autre création de document
                         .requestMatchers(HttpMethod.POST,
                                 "/api/documents/**").hasRole("ADMIN")
                         .requestMatchers(HttpMethod.PUT,

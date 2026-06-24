@@ -3,7 +3,6 @@ package com.bibliotech.acces;
 import com.bibliotech.audit.*;
 import com.bibliotech.catalogue.document.*;
 import com.bibliotech.exception.ResourceNotFoundException;
-import com.bibliotech.notification.EmailService;
 import com.bibliotech.utilisateur.*;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
@@ -24,7 +23,6 @@ public class AccesService {
     private final DocumentRepository documentRepo;
     private final UtilisateurRepository utilisateurRepo;
     private final AuditService auditService;
-    private final EmailService emailService;
 
     @Transactional
     public byte[] telecharger(Long documentId,
@@ -36,18 +34,6 @@ public class AccesService {
                 "Téléchargement: \""
                         + getDocumentTitre(documentId) + "\"",
                 extractIp(request));
-
-        // ── Send download confirmation email ──────────────────────
-        String email = currentUser();
-        utilisateurRepo.findByEmail(email).ifPresent(u ->
-                documentRepo.findById(documentId).ifPresent(doc ->
-                        emailService.sendDownloadConfirmation(
-                                email,
-                                u.getPrenom(),
-                                doc.getTitre(),
-                                doc.getAuteur())
-                )
-        );
 
         return bytes;
     }

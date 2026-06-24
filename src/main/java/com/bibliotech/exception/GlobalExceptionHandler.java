@@ -1,15 +1,19 @@
 package com.bibliotech.exception;
 
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.*;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.*;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.context.request.async.*;
 
 import java.time.Instant;
 import java.util.HashMap;
 import java.util.Map;
+@Slf4j
+
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
@@ -65,5 +69,10 @@ public class GlobalExceptionHandler {
         body.put("status", status.value());
         body.put("message", message);
         return ResponseEntity.status(status).body(body);
+    }
+
+    @ExceptionHandler(org.springframework.web.context.request.async.AsyncRequestNotUsableException.class)
+    public void handleAsyncRequestNotUsable(org.springframework.web.context.request.async.AsyncRequestNotUsableException ex) {
+        log.warn("Connexion client perdue avant la fin de la réponse : {}", ex.getMessage());
     }
 }

@@ -1,6 +1,7 @@
 server:
   port: 8080
-
+  tomcat:
+    connection-timeout: 300000
 spring:
   application:
     name: bibliotech
@@ -31,20 +32,25 @@ spring:
       chat:
         options:
           model: qwen2.5:3b
-          temperature: 0.7
-      # NEW: embedding model via Ollama (free, local)
+          temperature: 0.0         # 0.0 au lieu de 0.1 pour éliminer toute hésitation mathématique du modèle
+          top-k: 10
+          top-p: 0.5
+          num-ctx: 4096            # OPTIMISÉ CPU : Réduit à 4096 pour diviser par deux le temps de calcul du contexte
+          num-predict: 256         # OPTIMISÉ CPU : Réduit à 256. Le chatbot n'a pas besoin d'écrire un roman en soutenance.
+          keep-alive: "24h"      # Maintient le modèle en mémoire VRAM
       embedding:
         options:
           model: nomic-embed-text
-    # NEW: Qdrant Cloud vector store
+
+    # OPTIMISÉ : Clés masquées via variables d'environnement pour éviter les fuites sur GitHub
     vectorstore:
       qdrant:
-        host: 0fd6fa2b-f39e-4120-aeb0-b909219299a5.europe-west6-0.gcp.cloud.qdrant.io        # e.g. abc123.eu-central.aws.cloud.qdrant.io
-        port: 6334                  # Qdrant Cloud gRPC port (always 6334)
-        api-key: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhY2Nlc3MiOiJtIiwic3ViamVjdCI6ImFwaS1rZXk6MGEzZTZkMWYtYTFhZC00NDkyLWE1NTgtMjdmNWJiMTdlM2U3In0.5nV7CbYmIvMti8EgIvtGDhdSvUW9w7M0lIkTb-3Tyt8
+        host: ff732f6a-619e-4eac-ad4d-7fcd04f861c2.eu-west-2-0.aws.cloud.qdrant.io
+        port: 6334
+        api-key: ${QDRANT_API_KEY:eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhY2Nlc3MiOiJtIiwic3ViamVjdCI6ImFwaS1rZXk6ZDg2YmJlMzItNmUyNS00MTczLWJkNTgtODc0OTk1ZjMxZDRiIn0.RR9hsSxSSBl8JXwE6anVwHQB1f5ttu8VgLnwLuF6igQ}
         collection-name: bibliotech-rag
-        use-tls: true               # required for Qdrant Cloud
-        initialize-schema: true     # auto-creates collection on first startup
+        use-tls: true
+        initialize-schema: true
 
   mail:
     host: smtp.gmail.com
@@ -71,13 +77,18 @@ bibliotech:
     app-name: BiblioTech
   storage:
     upload-dir: ./uploads
-  tts:
-    max-chars: 3000
-    max-pages: 10
-    engine: espeak  # ou "marytts"
+    tts:
+      engine: piper
+      max-chars: 4000
+      max-pages: 1000
+      openai-api-key: ${OPENAI_API_KEY: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}
+      piper:
+        executable-path: "C:\\piper\\piper.exe"
+        model-path: "C:\\piper\\fr_FR-siwis-medium.onnx"
+    openai-api-key: ${OPENAI_API_KEY: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}
   rag:
     enabled: true
-    chunk-size: 500       # tokens per chunk
-    chunk-overlap: 50     # overlap between consecutive chunks
-    top-k: 5              # chunks retrieved per query
-    min-score: 0.50       # minimum cosine similarity (0.0 - 1.0)
+    chunk-size: 400
+    chunk-overlap: 40
+    top-k: 4
+    min-score: 0.55

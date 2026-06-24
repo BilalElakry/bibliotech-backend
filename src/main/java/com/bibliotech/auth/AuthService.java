@@ -2,7 +2,6 @@ package com.bibliotech.auth;
 
 import com.bibliotech.audit.*;
 import com.bibliotech.exception.BusinessException;
-import com.bibliotech.notification.EmailService;
 import com.bibliotech.security.JwtUtils;
 import com.bibliotech.utilisateur.*;
 import lombok.RequiredArgsConstructor;
@@ -25,7 +24,6 @@ public class AuthService {
     private final PasswordEncoder passwordEncoder;
     private final UtilisateurService utilisateurService;
     private final AuditService auditService;
-    private final EmailService emailService;
     public AuthResponse login(AuthRequest req) {
         try {
             authManager.authenticate(
@@ -75,7 +73,6 @@ public class AuthService {
                 "Nouveau compte: " + req.prenom() + " " + req.nom(), "");
 
         // ── Send welcome email ────────────────────────────────────
-        emailService.sendWelcome(req.email(), req.prenom());
 
         return saved;
     }

@@ -2,7 +2,6 @@ package com.bibliotech.utilisateur;
 
 import com.bibliotech.audit.*;
 import com.bibliotech.exception.*;
-import com.bibliotech.notification.EmailService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -17,7 +16,6 @@ public class UtilisateurService {
     private final UtilisateurRepository repo;
     private final PasswordEncoder encoder;
     private final AuditService auditService;
-    private final EmailService emailService;
     @Transactional(readOnly = true)
     public List<UtilisateurDTO> findAll() {
         return repo.findAll().stream().map(this::toDTO).toList();
@@ -57,9 +55,6 @@ public class UtilisateurService {
                 "Compte " + u.getEmail() + " "
                         + (wasActif ? "désactivé" : "activé"), "");
 
-        // ── Notify user of account status change ──────────────────
-        emailService.sendAccountStatusChange(
-                u.getEmail(), u.getPrenom(), !wasActif);
 
         return saved;
     }
@@ -86,8 +81,6 @@ public class UtilisateurService {
         auditService.log(AuditAction.PASSWORD_CHANGE, email,
                 "Mot de passe modifié", "");
 
-        // ── Notify user of password change ────────────────────────
-        emailService.sendPasswordChanged(email, u.getPrenom());
     }
 
     private Utilisateur getOrThrow(Long id) {
